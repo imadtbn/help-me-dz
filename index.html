@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ساعدني - دليل المؤسسات المحلية في الجزائر</title>
+
+    <!-- Meta tags for SEO -->
+    <meta name="description" content="دليل شامل للبحث عن المستشفيات، الصيدليات، العيادات، والأطباء في الجزائر">
+    <meta name="keywords" content="دليل طبي, مستشفيات الجزائر, صيدليات, أطباء, عيادات, خدمات طبية">
+    <meta name="author" content="ساعدني">
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="ساعدني - دليل المؤسسات المحلية في الجزائر">
+    <meta property="og:description" content="ابحث عن المؤسسات الطبية والخدمية في مدينتك">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="ar_DZ">
+
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/map-styles.css">
+    <link rel="stylesheet" href="css/responsive.css">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="images/favicon.ico">
+    <link rel="apple-touch-icon" href="images/apple-touch-icon.png">
+
+    <!-- PWA Support -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4361ee">
+</head>
+
+<body>
+    <!-- شريط التنقل العلوي -->
+    <header class="header" id="main-header">
+        <div class="container">
+            <nav class="navbar" role="navigation" aria-label="القائمة الرئيسية">
+                <div class="logo">
+                    <a href="index.html" aria-label="الصفحة الرئيسية - ساعدني">
+                        <i class="fas fa-hands-helping" aria-hidden="true"></i>
+                        <span>ساعدني</span>
+                    </a>
+                </div>
+
+                <div class="nav-links" id="main-nav">
+                    <a href="index.html" class="active" aria-current="page">
+                        <i class="fas fa-home"></i> الرئيسية
+                    </a>
+                    <a href="search.html">
+                        <i class="fas fa-search"></i> بحث متقدم
+                    </a>
+                    <a href="categories.html">
+                        <i class="fas fa-list"></i> الفئات
+                    </a>
+                    <a href="add-business.html">
+                        <i class="fas fa-plus-circle"></i> أضف مؤسسة
+                    </a>
+                    <a href="about.html">
+                        <i class="fas fa-info-circle"></i> عنا
+                    </a>
+                </div>
+
+                <button class="mobile-menu-btn" id="mobile-menu-toggle" aria-label="فتح القائمة" aria-expanded="false">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <!-- قسم البطل -->
+    <section class="hero" role="banner">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title">ابحث عن المؤسسات والخدمات في الجزائر</h1>
+                <p class="hero-subtitle">دليلك الشامل للعثور على المستشفيات، العيادات، الصيدليات والمؤسسات الخدمية في
+                    جميع مدن الجزائر</p>
+
+                <!-- شريط البحث -->
+                <div class="search-box" role="search">
+                    <form class="search-form" id="search-form" role="search">
+                        <div class="search-input-group">
+                            <i class="fas fa-search search-icon" aria-hidden="true"></i>
+                            <input type="search" id="main-search" class="search-input"
+                                placeholder="ماذا تبحث عن؟ (اسم المؤسسة، طبيب، خدمة...)"
+                                aria-label="بحث عن مؤسسة أو خدمة">
+                        </div>
+
+                        <div class="search-input-group">
+                            <i class="fas fa-map-marker-alt search-icon" aria-hidden="true"></i>
+                            <input type="text" id="location-search" class="search-input"
+                                placeholder="المدينة أو المنطقة" aria-label="المدينة أو المنطقة" list="algerian-cities">
+                            <datalist id="algerian-cities">
+                                <!-- سيتم ملؤها بواسطة JavaScript -->
+                            </datalist>
+                        </div>
+
+                        <select id="category-select" class="category-select" aria-label="اختر الفئة">
+                            <option value="">جميع الفئات</option>
+                            <option value="hospital">مستشفيات</option>
+                            <option value="clinic">عيادات</option>
+                            <option value="pharmacy">صيدليات</option>
+                            <option value="doctor">أطباء</option>
+                            <option value="dentist">أطباء أسنان</option>
+                            <option value="laboratory">مختبرات</option>
+                            <option value="association">جمعيات</option>
+                        </select>
+
+                        <button type="submit" id="search-btn" class="search-btn" aria-label="بحث">
+                            <i class="fas fa-search" aria-hidden="true"></i> بحث
+                        </button>
+                    </form>
+
+                    <!-- فئات سريعة -->
+                    <div class="quick-categories" aria-label="فئات سريعة">
+                        <h3>تصفح حسب الفئة:</h3>
+                        <div class="categories-grid">
+                            <a href="category.html?cat=hospital" class="category-card">
+                                <div class="category-icon" aria-hidden="true">
+                                    <i class="fas fa-hospital"></i>
+                                </div>
+                                <span>مستشفيات</span>
+                            </a>
+
+                            <a href="category.html?cat=clinic" class="category-card">
+                                <div class="category-icon" aria-hidden="true">
+                                    <i class="fas fa-clinic-medical"></i>
+                                </div>
+                                <span>عيادات</span>
+                            </a>
+
+                            <a href="category.html?cat=pharmacy" class="category-card">
+                                <div class="category-icon" aria-hidden="true">
+                                    <i class="fas fa-prescription-bottle-alt"></i>
+                                </div>
+                                <span>صيدليات</span>
+                            </a>
+
+                            <a href="category.html?cat=doctor" class="category-card">
+                                <div class="category-icon" aria-hidden="true">
+                                    <i class="fas fa-user-md"></i>
+                                </div>
+                                <span>أطباء</span>
+                            </a>
+
+                            <a href="category.html?cat=dentist" class="category-card">
+                                <div class="category-icon" aria-hidden="true">
+                                    <i class="fas fa-tooth"></i>
+                                </div>
+                                <span>أسنان</span>
+                            </a>
+
+                            <a href="category.html?cat=laboratory" class="category-card">
+                                <div class="category-icon" aria-hidden="true">
+                                    <i class="fas fa-flask"></i>
+                                </div>
+                                <span>مختبرات</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="main-content" id="main-content">
+        <div class="container">
+            <div class="content-wrapper">
+                <!-- قسم الخريطة -->
+                <section class="map-section" aria-labelledby="map-title">
+                    <div class="section-header">
+                        <h2 id="map-title"><i class="fas fa-map-marked-alt"></i> الخريطة التفاعلية</h2>
+                        <button id="locate-me" class="btn-secondary" aria-label="تحديد موقعي الحالي">
+                            <i class="fas fa-location-arrow"></i> تحديد موقعي
+                        </button>
+                    </div>
+
+                    <div id="map" class="interactive-map" aria-label="خريطة تفاعلية للمؤسسات" role="application"
+                        tabindex="0"></div>
+
+                    <div class="map-controls" aria-label="تحكمات الخريطة">
+                        <button id="zoom-in" class="map-control-btn" aria-label="تكبير الخريطة">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button id="zoom-out" class="map-control-btn" aria-label="تصغير الخريطة">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <button id="fullscreen-map" class="map-control-btn" aria-label="عرض الخريطة بكامل الشاشة">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- نتائج البحث -->
+                <section class="results-section" aria-labelledby="results-title">
+                    <div class="section-header">
+                        <h2 id="results-title"><i class="fas fa-search"></i> نتائج البحث</h2>
+                        <div class="results-count">عُرض <span id="results-count">0</span> نتيجة</div>
+                    </div>
+
+                    <div class="filters" aria-label="خيارات التصفية">
+                        <select id="sort-select" class="filter-select" aria-label="ترتيب النتائج">
+                            <option value="distance">الأقرب أولاً</option>
+                            <option value="rating">الأعلى تقييماً</option>
+                            <option value="name">الاسم (أ-ي)</option>
+                            <option value="reviewCount">الأكثر تقييماً</option>
+                        </select>
+
+                        <select id="radius-select" class="filter-select" aria-label="نطاق البحث">
+                            <option value="2">نطاق 2 كم</option>
+                            <option value="5" selected>نطاق 5 كم</option>
+                            <option value="10">نطاق 10 كم</option>
+                            <option value="20">نطاق 20 كم</option>
+                        </select>
+
+                        <button id="clear-filters" class="btn-secondary" aria-label="إعادة تعيين الفلاتر">
+                            <i class="fas fa-redo"></i> إعادة تعيين
+                        </button>
+                    </div>
+
+                    <div id="business-results" class="business-results" aria-live="polite" aria-atomic="true">
+                        <!-- سيتم ملؤها بواسطة JavaScript -->
+                        <div class="initial-message">
+                            <i class="fas fa-search" aria-hidden="true"></i>
+                            <p>ابدأ بالبحث عن المؤسسات في مدينتك</p>
+                        </div>
+                    </div>
+
+                    <!-- تحميل المزيد -->
+                    <div class="load-more-container" id="load-more-container" style="display: none;">
+                        <button id="load-more-btn" class="load-more-btn">
+                            <i class="fas fa-arrow-down"></i> تحميل المزيد
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- المؤسسات المميزة -->
+            <section class="featured-section" aria-labelledby="featured-title">
+                <div class="section-header">
+                    <h2 id="featured-title"><i class="fas fa-star"></i> مؤسسات مميزة</h2>
+                    <a href="featured.html" class="view-all" aria-label="عرض جميع المؤسسات المميزة">
+                        عرض الكل <i class="fas fa-arrow-left"></i>
+                    </a>
+                </div>
+
+                <div class="featured-grid" id="featured-grid">
+                    <!-- سيتم ملؤها بواسطة JavaScript -->
+                    <div class="loading-featured">
+                        <div class="spinner small"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- قسم الإحصائيات  -->
+            <section class="stats-section" aria-labelledby="stats-title">
+                <div class="container">
+                    <div class="section-header">
+                        <h2 id="stats-title">
+                            <i class="fas fa-chart-line"></i> إحصائيات حية
+                            <span class="stats-subtitle">تحديث تلقائي كل 30 ثانية</span>
+                        </h2>
+                        <div class="stats-update-time">
+                            <i class="fas fa-sync-alt"></i>
+                            <span id="last-update">آخر تحديث: الآن</span>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <!-- مستشفيات -->
+                        <div class="stat-card" data-category="hospital">
+                            <div class="stat-indicator"></div>
+                            <div class="stat-icon">
+                                <i class="fas fa-hospital"></i>
+                            </div>
+                            <div class="stat-number" id="hospital-count">0</div>
+                            <div class="stat-label">مستشفى</div>
+                            <div class="stat-trend">
+                                <i class="fas fa-arrow-up trend-up"></i>
+                                <span class="trend-value">+12%</span>
+                            </div>
+                            <div class="stat-progress">
+                                <svg class="progress-ring" width="40" height="40">
+                                    <circle class="progress-ring-circle" stroke-width="4" fill="transparent" r="16"
+                                        cx="20" cy="20" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- عيادات -->
+                        <div class="stat-card" data-category="clinic">
+                            <div class="stat-indicator"></div>
+                            <div class="stat-icon">
+                                <i class="fas fa-clinic-medical"></i>
+                            </div>
+                            <div class="stat-number" id="clinic-count">0</div>
+                            <div class="stat-label">عيادة</div>
+                            <div class="stat-trend">
+                                <i class="fas fa-arrow-up trend-up"></i>
+                                <span class="trend-value">+8%</span>
+                            </div>
+                            <div class="stat-progress">
+                                <svg class="progress-ring" width="40" height="40">
+                                    <circle class="progress-ring-circle" stroke-width="4" fill="transparent" r="16"
+                                        cx="20" cy="20" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- صيدليات -->
+                        <div class="stat-card" data-category="pharmacy">
+                            <div class="stat-indicator"></div>
+                            <div class="stat-icon">
+                                <i class="fas fa-prescription-bottle-alt"></i>
+                            </div>
+                            <div class="stat-number" id="pharmacy-count">0</div>
+                            <div class="stat-label">صيدلية</div>
+                            <div class="stat-trend">
+                                <i class="fas fa-arrow-up trend-up"></i>
+                                <span class="trend-value">+15%</span>
+                            </div>
+                            <div class="stat-progress">
+                                <svg class="progress-ring" width="40" height="40">
+                                    <circle class="progress-ring-circle" stroke-width="4" fill="transparent" r="16"
+                                        cx="20" cy="20" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <!-- أطباء -->
+                        <div class="stat-card" data-category="doctor">
+                            <div class="stat-indicator"></div>
+                            <div class="stat-icon">
+                                <i class="fas fa-user-md"></i>
+                            </div>
+                            <div class="stat-number" id="doctor-count">0</div>
+                            <div class="stat-label">طبيب</div>
+                            <div class="stat-trend">
+                                <i class="fas fa-arrow-up trend-up"></i>
+                                <span class="trend-value">+5%</span>
+                            </div>
+                            <div class="stat-progress">
+                                <svg class="progress-ring" width="40" height="40">
+                                    <circle class="progress-ring-circle" stroke-width="4" fill="transparent" r="16"
+                                        cx="20" cy="20" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- إحصائيات إضافية -->
+                    <div class="additional-stats" id="additional-stats">
+                        <div class="additional-stat">
+                            <div class="stat-value">0</div>
+                            <div class="stat-description">مؤسسة مميزة</div>
+                        </div>
+                        <div class="additional-stat">
+                            <div class="stat-value">0</div>
+                            <div class="stat-description">مدينة مغطاة</div>
+                        </div>
+                        <div class="additional-stat">
+                            <div class="stat-value">0</div>
+                            <div class="stat-description">تقييم مقدم</div>
+                        </div>
+                        <div class="additional-stat">
+                            <div class="stat-value">0.0</div>
+                            <div class="stat-description">متوسط التقييم</div>
+                        </div>
+                    </div>
+
+                    <!-- زر عرض المزيد -->
+                    <div class="stats-more">
+                        <button id="stats-toggle-btn" class="stats-toggle-btn">
+                            <i class="fas fa-chevron-down"></i> عرض التفاصيل
+                        </button>
+
+                        <!-- زر تصدير الإحصائيات -->
+                        <button id="export-stats" class="btn-secondary">
+                            <i class="fas fa-download"></i> تصدير الإحصائيات
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- التذييل -->
+    <footer class="footer" role="contentinfo">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <i class="fas fa-hands-helping" aria-hidden="true"></i>
+                        <span>ساعدني</span>
+                    </div>
+                    <p class="footer-description">
+                        المنصة الشاملة للبحث عن المؤسسات والخدمات في جميع مدن الجزائر
+                    </p>
+                    <div class="app-badges">
+                        <a href="#" class="app-badge" aria-label="تحميل من متجر Google Play">
+                            <i class="fab fa-google-play"></i>
+                            <span>Google Play</span>
+                        </a>
+                        <a href="#" class="app-badge" aria-label="تحميل من متجر App Store">
+                            <i class="fab fa-app-store"></i>
+                            <span>App Store</span>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="footer-section">
+                    <h3>روابط سريعة</h3>
+                    <ul class="footer-links">
+                        <li><a href="index.html">الرئيسية</a></li>
+                        <li><a href="search.html">البحث المتقدم</a></li>
+                        <li><a href="categories.html">جميع الفئات</a></li>
+                        <li><a href="add-business.html">أضف مؤسستك</a></li>
+                        <li><a href="business-owner.html">لوحة تحكم المؤسسات</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h3>الفئات الرئيسية</h3>
+                    <ul class="footer-links">
+                        <li><a href="category.html?cat=hospital">المستشفيات</a></li>
+                        <li><a href="category.html?cat=clinic">العيادات</a></li>
+                        <li><a href="category.html?cat=pharmacy">الصيدليات</a></li>
+                        <li><a href="category.html?cat=doctor">الأطباء</a></li>
+                        <li><a href="category.html?cat=dentist">أطباء الأسنان</a></li>
+                    </ul>
+                </div>
+
+                <div class="footer-section">
+                    <h3>اتصل بنا</h3>
+                    <ul class="footer-contact">
+                        <li><i class="fas fa-envelope" aria-hidden="true"></i> contact@saaedni.dz</li>
+                        <li><i class="fas fa-phone" aria-hidden="true"></i> 0560 12 34 56</li>
+                        <li><i class="fas fa-map-marker-alt" aria-hidden="true"></i> الجزائر العاصمة</li>
+                    </ul>
+                    <div class="newsletter">
+                        <h4>اشترك في النشرة الإخبارية</h4>
+                        <form class="newsletter-form">
+                            <input type="email" placeholder="بريدك الإلكتروني" aria-label="البريد الإلكتروني">
+                            <button type="submit" aria-label="اشترك">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <p>&copy; 2023 ساعدني. جميع الحقوق محفوظة.</p>
+                <div class="footer-bottom-links">
+                    <a href="privacy.html">سياسة الخصوصية</a>
+                    <a href="terms.html">شروط الاستخدام</a>
+                    <a href="sitemap.xml">خريطة الموقع</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- نموذج تفاصيل المؤسسة -->
+    <div id="business-detail-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"
+        style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">اسم المؤسسة</h2>
+                <button class="close-modal" aria-label="إغلاق">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- سيتم ملؤها بواسطة JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة تحميل -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner large"></div>
+            <p class="loading-text">جاري التحميل...</p>
+        </div>
+    </div>
+
+    <!-- تحميل مكتبات JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script src="js/config.js"></script>
+    <script src="js/data.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/main.js"></script>
+    <script src="js/stats.js"></script>
+
+
+    <!-- Service Worker for PWA -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(function (registration) {
+                        console.log('ServiceWorker registration successful');
+                    }, function (err) {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
+
+</body>
+
+</html>
