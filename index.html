@@ -489,14 +489,44 @@
     </div>
 
     <!-- تحميل مكتبات JavaScript -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <script src="js/config.js"></script>
-    <script src="js/data.js"></script>
-    <script src="js/map.js"></script>
-    <script src="js/main.js"></script>
-    <script src="js/stats.js"></script>
+     <!-- مكتبة Leaflet للخرائط (يجب أن تكون أولاً) -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- ملفات JavaScript مرتبة حسب التبعيات -->
 
+<script src="js/main.js"></script>
+<script src="js/data.js"></script>
+<script src="js/config.js"></script>
+<script src="js/map.js"></script>
+<script src="js/stats.js"></script>
+
+
+<!-- تهيئة التطبيق بعد تحميل الصفحة -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // تأكد من تحميل جميع الملفات
+        if (window.CONFIG && window.BusinessDataModule && window.mapModule) {
+            console.log('✅ جميع الملفات محملة بنجاح');
+            
+            // هنا يمكنك وضع كود تهيئة إضافي
+            if (typeof initApp === 'function') {
+                initApp();
+            }
+        } else {
+            console.error('❌ بعض الملفات لم تحمل بشكل صحيح');
+            
+            // محاولة إعادة تحميل الملفات المفقودة
+            if (!window.CONFIG) {
+                console.warn('⚠️ ملف config.js لم يحمل');
+            }
+            if (!window.BusinessDataModule) {
+                console.warn('⚠️ ملف data.js لم يحمل');
+            }
+            if (!window.mapModule) {
+                console.warn('⚠️ ملف map.js لم يحمل');
+            }
+        }
+    });
+</script>
 
     <!-- Service Worker for PWA -->
     <script>
