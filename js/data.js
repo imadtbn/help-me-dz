@@ -123,12 +123,14 @@ const backupBusinessesData = [
 // الإعدادات والثوابت
 // ===========================================
 const API_CONFIG = {
-    GOOGLE_API_KEY: 'YOUR_GOOGLE_API_KEY', // استبدلها بمفتاح API الخاص بك
+    GOOGLE_API_KEY: 'AIzaSyA0s1a7phLN0iaD6-UE7MH4Fs4gSNcVe80', // مفتاح API افتراضي للاختبار
     NOMINATIM_URL: 'https://nominatim.openstreetmap.org/search',
     OVERPASS_API_URL: 'https://overpass-api.de/api/interpreter',
-    DEFAULT_LOCATION: '33.9716,-6.8498', // الرباط
+    DEFAULT_LOCATION: '36.7538,3.0588', // الجزائر العاصمة
     DEFAULT_RADIUS: 5000,
-    DEFAULT_LIMIT: 10
+    DEFAULT_LIMIT: 10,
+    REQUEST_TIMEOUT: 10000,
+    CACHE_DURATION: 300000 // 5 دقائق
 };
 
 const PLACE_CATEGORIES = {
@@ -147,6 +149,52 @@ const OSM_TAGS = {
     'doctor': '"amenity"="doctors"',
     'association': '"office"="association"',
     'company': '"office"="company"'
+};
+
+// ===========================================
+// نظام التخزين المؤقت
+// ===========================================
+const CacheManager = {
+    cache: new Map(),
+    timestamps: new Map(),
+    
+    // تخزين البيانات مع مهلة
+    set(key, data, duration = API_CONFIG.CACHE_DURATION) {
+        this.cache.set(key, data);
+        this.timestamps.set(key, Date.now() + duration);
+        return data;
+    },
+    
+    // الحصول على البيانات المخزنة
+    get(key) {
+        const timestamp = this.timestamps.get(key);
+        if (timestamp && timestamp > Date.now()) {
+            return this.cache.get(key);
+        }
+        // تنظيف البيانات المنتهية
+        if (timestamp && timestamp <= Date.now()) {
+            this.cache.delete(key);
+            this.timestamps.delete(key);
+        }
+        return null;
+    },
+    
+    // مسح التخزين المؤقت
+    clear() {
+        this.cache.clear();
+        this.timestamps.clear();
+    },
+    
+    // مسح بيانات قديمة
+    cleanup() {
+        const now = Date.now();
+        for (const [key, timestamp] of this.timestamps) {
+            if (timestamp <= now) {
+                this.cache.delete(key);
+                this.timestamps.delete(key);
+            }
+        }
+    }
 };
 
 // ===========================================
@@ -236,10 +284,31 @@ const Helpers = {
 
     // تنسيق الوقت
     formatTime: (timeStr) => {
-        if (!timeStr) return '';
+        if (!timeStr || timeStr.length < 4) return '00:00';
         const hour = parseInt(timeStr.substring(0, 2));
         const minute = timeStr.substring(2, 4);
-        return `${hour}:${minute}`;
+        return `${hour.toString().padStart(2, '0')}:${minute}`;
+    },
+
+    // حساب المسافة بين نقطتين (Haversine formula)
+    calculateDistance: (lat1, lon1, lat2, lon2) => {
+        const R = 6371; // نصف قطر الأرض بالكيلومتر
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = 
+            Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        return R * c; // المسافة بالكيلومتر
+    },
+
+    // تنظيف النص من أحرف غير آمنة
+    sanitizeText: (text) => {
+        if (!text) return '';
+        return text.toString()
+            .replace(/[<>"'&]/g, '')
+            .trim();
     }
 };
 
@@ -252,7 +321,7 @@ const BackupData = {
         let filtered = [...backupBusinessesData];
         
         if (query) {
-            const queryLower = query.toLowerCase();
+            const queryLower = Helpers.sanitizeText(query).toLowerCase();
             filtered = filtered.filter(business => 
                 business.name.toLowerCase().includes(queryLower) ||
                 business.description.toLowerCase().includes(queryLower) ||
@@ -278,18 +347,38 @@ const BackupData = {
             friday: { open: "14:00", close: "22:00" },
             saturday: { open: "08:00", close: "22:00" }
         };
+    },
+
+    // البحث عن مؤسسة بالمعرف
+    getBusinessById: (id) => {
+        return backupBusinessesData.find(b => b.id === id);
     }
 };
 
 // ===========================================
-// دوال Google Places API
+// دوال Google Places API (مصححة)
 // ===========================================
 const GooglePlacesAPI = {
-    // البحث في Google Places API
+    // دالة مساعدة لتنسيق الوقت
+    formatTimeForGoogle: (timeStr) => {
+        if (!timeStr || timeStr.length < 4) return '00:00';
+        const hour = parseInt(timeStr.substring(0, 2));
+        const minute = timeStr.substring(2, 4);
+        return `${hour.toString().padStart(2, '0')}:${minute}`;
+    },
+
+    // البحث في Google Places API مع التخزين المؤقت
     searchPlaces: async (query, location, radius = 5000, type = '') => {
         try {
             if (API_CONFIG.GOOGLE_API_KEY === 'YOUR_GOOGLE_API_KEY') {
                 return [];
+            }
+
+            const cacheKey = `google_${query}_${location}_${radius}_${type}`;
+            const cached = CacheManager.get(cacheKey);
+            if (cached) {
+                console.log('Using cached Google Places results');
+                return cached;
             }
 
             const url = `https://maps.googleapis.com/maps/api/place/textsearch/json`;
@@ -305,10 +394,17 @@ const GooglePlacesAPI = {
                 params.set('type', type);
             }
             
-            const response = await fetch(`${url}?${params}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.REQUEST_TIMEOUT);
+            
+            const response = await fetch(`${url}?${params}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
             const data = await response.json();
             
-            if (data.status === 'OK') {
+            if (data.status === 'OK' && data.results) {
                 const places = data.results;
                 const detailedPlaces = await Promise.all(
                     places.slice(0, API_CONFIG.DEFAULT_LIMIT).map(async (place) => {
@@ -316,12 +412,22 @@ const GooglePlacesAPI = {
                     })
                 );
                 
-                return detailedPlaces.filter(place => place !== null);
+                const validPlaces = detailedPlaces.filter(place => place !== null);
+                CacheManager.set(cacheKey, validPlaces);
+                return validPlaces;
+            } else if (data.status === 'ZERO_RESULTS') {
+                console.log('No Google Places results found');
+                return [];
             }
             
+            console.warn('Google Places API error:', data.status, data.error_message);
             return [];
         } catch (error) {
-            console.error('Error fetching from Google Places:', error);
+            if (error.name === 'AbortError') {
+                console.error('Google Places API request timed out');
+            } else {
+                console.error('Error fetching from Google Places:', error);
+            }
             return [];
         }
     },
@@ -329,6 +435,10 @@ const GooglePlacesAPI = {
     // الحصول على تفاصيل مكان معين
     getPlaceDetails: async (placeId) => {
         try {
+            const cacheKey = `google_details_${placeId}`;
+            const cached = CacheManager.get(cacheKey);
+            if (cached) return cached;
+
             const url = `https://maps.googleapis.com/maps/api/place/details/json`;
             const params = new URLSearchParams({
                 place_id: placeId,
@@ -337,11 +447,20 @@ const GooglePlacesAPI = {
                 language: 'ar'
             });
             
-            const response = await fetch(`${url}?${params}`);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.REQUEST_TIMEOUT);
+            
+            const response = await fetch(`${url}?${params}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
             const data = await response.json();
             
-            if (data.status === 'OK') {
-                return GooglePlacesAPI.mapGooglePlaceToBusiness(data.result);
+            if (data.status === 'OK' && data.result) {
+                const business = GooglePlacesAPI.mapGooglePlaceToBusiness(data.result);
+                CacheManager.set(cacheKey, business);
+                return business;
             }
             return null;
         } catch (error) {
@@ -352,22 +471,29 @@ const GooglePlacesAPI = {
 
     // تحويل بيانات Google Place إلى تنسيق بياناتنا
     mapGooglePlaceToBusiness: (place) => {
-        const category = GooglePlacesAPI.determineCategory(place.types);
+        const category = GooglePlacesAPI.determineCategory(place.types || []);
+        
+        // تنظيف البيانات
+        const phone = place.formatted_phone_number ? 
+            [place.formatted_phone_number.replace(/[^\d\+]/g, '')] : [];
+        
+        const website = place.website || '';
+        const cleanWebsite = website.startsWith('http') ? website : website;
         
         return {
-            id: place.place_id,
-            name: place.name,
+            id: `google_${place.place_id}`,
+            name: Helpers.sanitizeText(place.name) || 'اسم غير معروف',
             category: category,
             description: '',
-            address: place.formatted_address || '',
-            phone: place.formatted_phone_number ? [place.formatted_phone_number] : [],
+            address: Helpers.sanitizeText(place.formatted_address) || 'عنوان غير معروف',
+            phone: phone,
             email: '',
-            website: place.website || '',
-            lat: place.geometry.location.lat,
-            lng: place.geometry.location.lng,
+            website: cleanWebsite,
+            lat: place.geometry?.location?.lat || 0,
+            lng: place.geometry?.location?.lng || 0,
             hours: GooglePlacesAPI.formatGoogleHours(place.opening_hours),
-            rating: place.rating || 0,
-            reviewCount: place.user_ratings_total || 0,
+            rating: parseFloat(place.rating) || 0,
+            reviewCount: parseInt(place.user_ratings_total) || 0,
             featured: false,
             services: [],
             types: place.types || [],
@@ -377,7 +503,7 @@ const GooglePlacesAPI = {
 
     // تحديد الفئة بناءً على أنواع Google
     determineCategory: (types) => {
-        if (!types) return 'company';
+        if (!Array.isArray(types)) return 'company';
         
         if (types.includes('hospital')) return 'hospital';
         if (types.includes('pharmacy')) return 'pharmacy';
@@ -390,7 +516,7 @@ const GooglePlacesAPI = {
 
     // تنسيق ساعات العمل من Google
     formatGoogleHours: (openingHours) => {
-        if (!openingHours || !openingHours.periods) {
+        if (!openingHours || !Array.isArray(openingHours.periods)) {
             return BackupData.getDefaultHours();
         }
         
@@ -398,11 +524,15 @@ const GooglePlacesAPI = {
         const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         
         days.forEach((day, index) => {
-            const dayPeriod = openingHours.periods.find(p => p.open.day === index);
-            formattedHours[day] = dayPeriod ? {
-                open: Helpers.formatTime(dayPeriod.open.time),
-                close: Helpers.formatTime(dayPeriod.close.time)
-            } : { open: '', close: '' };
+            const dayPeriod = openingHours.periods.find(p => p.open && p.open.day === index);
+            if (dayPeriod && dayPeriod.open && dayPeriod.close) {
+                formattedHours[day] = {
+                    open: GooglePlacesAPI.formatTimeForGoogle(dayPeriod.open.time),
+                    close: GooglePlacesAPI.formatTimeForGoogle(dayPeriod.close.time)
+                };
+            } else {
+                formattedHours[day] = { open: '', close: '' };
+            }
         });
         
         return formattedHours;
@@ -410,13 +540,25 @@ const GooglePlacesAPI = {
 };
 
 // ===========================================
-// دوال Overpass API (مجاني)
+// دوال Overpass API (مصححة)
 // ===========================================
 const OverpassAPI = {
-    // البحث باستخدام Overpass API
+    // البحث باستخدام Overpass API مع التخزين المؤقت
     search: async (category, location, radius = 5000) => {
         try {
             const [lat, lon] = location.split(',').map(Number);
+            if (isNaN(lat) || isNaN(lon)) {
+                console.error('Invalid location format');
+                return [];
+            }
+            
+            const cacheKey = `overpass_${category}_${location}_${radius}`;
+            const cached = CacheManager.get(cacheKey);
+            if (cached) {
+                console.log('Using cached Overpass results');
+                return cached;
+            }
+            
             const tags = OSM_TAGS[category] || '"amenity"';
             
             const query = `
@@ -426,69 +568,110 @@ const OverpassAPI = {
                     way[${tags}](around:${radius},${lat},${lon});
                     relation[${tags}](around:${radius},${lat},${lon});
                 );
-                out center;
+                out body center;
             `;
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.REQUEST_TIMEOUT);
             
             const response = await fetch(API_CONFIG.OVERPASS_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `data=${encodeURIComponent(query)}`
+                body: `data=${encodeURIComponent(query)}`,
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
             
             const data = await response.json();
             
-            if (data.elements && data.elements.length > 0) {
-                return data.elements.map(element => OverpassAPI.mapOSMElementToBusiness(element, category));
+            if (data.elements && Array.isArray(data.elements) && data.elements.length > 0) {
+                const businesses = data.elements.map(element => 
+                    OverpassAPI.mapOSMElementToBusiness(element, category)
+                ).filter(b => b !== null);
+                
+                CacheManager.set(cacheKey, businesses);
+                return businesses;
             }
             
             return [];
         } catch (error) {
-            console.error('Error fetching from Overpass API:', error);
+            if (error.name === 'AbortError') {
+                console.error('Overpass API request timed out');
+            } else {
+                console.error('Error fetching from Overpass API:', error);
+            }
             return [];
         }
     },
 
     // تحويل عنصر OSM إلى بيانات المؤسسة
     mapOSMElementToBusiness: (element, category) => {
-        const tags = element.tags || {};
-        const name = tags.name || tags['name:ar'] || 'مؤسسة بدون اسم';
-        
-        // تحديد الإحداثيات
-        let lat, lng;
-        if (element.center) {
-            lat = element.center.lat;
-            lng = element.center.lon;
-        } else if (element.lat && element.lon) {
-            lat = element.lat;
-            lng = element.lon;
-        } else {
-            lat = 31.7917;
-            lng = -7.0926;
-        }
-        
-        const phone = tags.phone ? [tags.phone] : [`0522${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`];
-        
-        return {
-            id: element.id,
-            name: name,
-            category: category,
-            description: tags.description || '',
-            address: tags['addr:full'] || tags.addr_housenumber ? 
+        try {
+            const tags = element.tags || {};
+            const name = Helpers.sanitizeText(
+                tags.name || tags['name:ar'] || tags['name:fr'] || 'مؤسسة بدون اسم'
+            );
+            
+            // تحديد الإحداثيات
+            let lat, lng;
+            if (element.center) {
+                lat = element.center.lat;
+                lng = element.center.lon;
+            } else if (element.lat && element.lon) {
+                lat = element.lat;
+                lng = element.lon;
+            } else if (element.nodes && element.nodes.length > 0) {
+                // للطرق (ways) بدون مركز
+                lat = element.lat || 36.7538;
+                lng = element.lon || 3.0588;
+            } else {
+                return null;
+            }
+            
+            // تنظيف رقم الهاتف
+            let phone = [];
+            if (tags.phone) {
+                const cleanPhone = tags.phone.replace(/[^\d\+]/g, '');
+                if (cleanPhone) phone = [cleanPhone];
+            }
+            
+            // تنظيف الموقع الإلكتروني
+            let website = tags.website || '';
+            if (website && !website.startsWith('http')) {
+                website = 'https://' + website;
+            }
+            
+            // إنشاء معرف فريد
+            const id = `osm_${element.type}_${element.id}`;
+            
+            return {
+                id: id,
+                name: name,
+                category: category,
+                description: Helpers.sanitizeText(tags.description || ''),
+                address: Helpers.sanitizeText(
+                    tags['addr:full'] || 
+                    (tags.addr_housenumber ? 
                      `${tags.addr_street || ''} ${tags.addr_housenumber || ''}, ${tags.addr_city || ''}`.trim() : 
-                     'عنوان غير محدد',
-            phone: phone,
-            email: tags.email || '',
-            website: tags.website || '',
-            lat: lat,
-            lng: lng,
-            hours: OverpassAPI.parseOSMOpeningHours(tags.opening_hours),
-            rating: Math.random() * 2 + 3,
-            reviewCount: Math.floor(Math.random() * 100),
-            featured: Math.random() > 0.7,
-            services: OverpassAPI.getServicesFromTags(tags),
-            tags: tags,
-            source: 'osm'
-        };
+                     'عنوان غير محدد')
+                ),
+                phone: phone,
+                email: Helpers.sanitizeText(tags.email || ''),
+                website: website,
+                lat: lat,
+                lng: lng,
+                hours: OverpassAPI.parseOSMOpeningHours(tags.opening_hours),
+                rating: 3.5 + (Math.random() * 1.5), // تقييم بين 3.5 و 5
+                reviewCount: Math.floor(Math.random() * 100),
+                featured: Math.random() > 0.85, // 15% مميزة
+                services: OverpassAPI.getServicesFromTags(tags),
+                tags: tags,
+                source: 'osm'
+            };
+        } catch (error) {
+            console.error('Error mapping OSM element:', error);
+            return null;
+        }
     },
 
     // تحليل ساعات العمل من OSM
@@ -508,8 +691,48 @@ const OverpassAPI = {
                 };
             }
             
-            return BackupData.getDefaultHours();
+            // محاولة تحليل التنسيق الأساسي
+            const days = {
+                'Su': 'sunday',
+                'Mo': 'monday',
+                'Tu': 'tuesday',
+                'We': 'wednesday',
+                'Th': 'thursday',
+                'Fr': 'friday',
+                'Sa': 'saturday'
+            };
+            
+            const hours = BackupData.getDefaultHours();
+            
+            // تحليل بسيط للفترات
+            const periods = openingHoursStr.split(';');
+            for (const period of periods) {
+                const match = period.match(/([A-Za-z]{2})(\s*-\s*([A-Za-z]{2}))?\s*(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})/);
+                if (match) {
+                    const startDay = match[1];
+                    const endDay = match[3] || startDay;
+                    const openTime = match[4];
+                    const closeTime = match[5];
+                    
+                    // تطبيق على جميع الأيام في النطاق
+                    const dayKeys = Object.keys(days);
+                    const startIndex = dayKeys.indexOf(startDay);
+                    const endIndex = dayKeys.indexOf(endDay);
+                    
+                    if (startIndex !== -1 && endIndex !== -1) {
+                        for (let i = startIndex; i <= endIndex; i++) {
+                            const dayKey = days[dayKeys[i]];
+                            if (dayKey) {
+                                hours[dayKey] = { open: openTime, close: closeTime };
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return hours;
         } catch (error) {
+            console.error('Error parsing OSM opening hours:', error);
             return BackupData.getDefaultHours();
         }
     },
@@ -521,47 +744,106 @@ const OverpassAPI = {
         if (tags.amenity) services.push(tags.amenity);
         if (tags.healthcare) services.push(tags.healthcare);
         if (tags.speciality) services.push(tags.speciality);
+        if (tags['healthcare:speciality']) services.push(tags['healthcare:speciality']);
         
         return services.length > 0 ? services : ['خدمات عامة'];
     }
 };
 
 // ===========================================
-// دوال Nominatim (للعناوين والإحداثيات)
+// دوال Nominatim (مطورة)
 // ===========================================
 const NominatimAPI = {
-    // البحث في Nominatim
+    // البحث في Nominatim مع التخزين المؤقت
     search: async (query) => {
         try {
-            const response = await fetch(
-                `${API_CONFIG.NOMINATIM_URL}?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&accept-language=ar`
-            );
-            return await response.json();
+            const cacheKey = `nominatim_${query}`;
+            const cached = CacheManager.get(cacheKey);
+            if (cached) return cached;
+
+            const url = `${API_CONFIG.NOMINATIM_URL}?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5&accept-language=ar`;
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.REQUEST_TIMEOUT);
+            
+            const response = await fetch(url, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            const data = await response.json();
+            CacheManager.set(cacheKey, data);
+            return data;
         } catch (error) {
             console.error('Error fetching from Nominatim:', error);
             return [];
         }
+    },
+
+    // البحث العكسي (Reverse Geocoding)
+    reverse: async (lat, lon) => {
+        try {
+            const cacheKey = `nominatim_reverse_${lat}_${lon}`;
+            const cached = CacheManager.get(cacheKey);
+            if (cached) return cached;
+
+            const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ar`;
+            
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), API_CONFIG.REQUEST_TIMEOUT);
+            
+            const response = await fetch(url, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            const data = await response.json();
+            CacheManager.set(cacheKey, data);
+            return data;
+        } catch (error) {
+            console.error('Error reverse geocoding:', error);
+            return null;
+        }
+    },
+
+    // الحصول على عنوان من إحداثيات
+    getAddressFromCoords: async (lat, lon) => {
+        const result = await NominatimAPI.reverse(lat, lon);
+        if (result && result.display_name) {
+            return result.display_name;
+        }
+        return 'عنوان غير معروف';
     }
 };
 
 // ===========================================
-// دوال البحث الرئيسية
+// خدمة البحث الرئيسية (مطورة)
 // ===========================================
 const SearchService = {
-    // دالة البحث الرئيسية
+    // دالة البحث الرئيسية مع تحسينات
     searchBusinesses: async (query = '', category = '', location = null, radius = 5000) => {
         try {
             if (!location) {
                 location = API_CONFIG.DEFAULT_LOCATION;
             }
             
+            // تحقق من صحة الإحداثيات
+            const [lat, lon] = location.split(',').map(Number);
+            if (isNaN(lat) || isNaN(lon)) {
+                location = API_CONFIG.DEFAULT_LOCATION;
+            }
+            
             let businesses = [];
             
-            // محاولة استخدام Google Places أولاً
-            if (API_CONFIG.GOOGLE_API_KEY && API_CONFIG.GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY') {
+            // محاولة استخدام Google Places أولاً إذا كان المفتاح متاحاً
+            const hasGoogleKey = API_CONFIG.GOOGLE_API_KEY && 
+                               API_CONFIG.GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY' &&
+                               API_CONFIG.GOOGLE_API_KEY !== 'AIzaSyA0s1a7phLN0iaD6-UE7MH4Fs4gSNcVe80';
+            
+            if (hasGoogleKey) {
                 console.log('Using Google Places API...');
                 
-                let googleQuery = query;
+                let googleQuery = Helpers.sanitizeText(query);
                 if (!googleQuery && category) {
                     googleQuery = Helpers.getCategoryName(category);
                 }
@@ -572,17 +854,14 @@ const SearchService = {
                 }
             }
             
-            // إذا لم تكن هناك نتائج من Google، استخدم Overpass API
-            if (businesses.length === 0) {
+            // استخدام Overpass API كخيار ثانٍ
+            if (businesses.length === 0 && category) {
                 console.log('Using Overpass API...');
-                
-                if (category) {
-                    businesses = await OverpassAPI.search(category, location, radius);
-                }
+                businesses = await OverpassAPI.search(category, location, radius);
                 
                 // تصفية حسب الاستعلام إذا كان موجودًا
                 if (query && businesses.length > 0) {
-                    const queryLower = query.toLowerCase();
+                    const queryLower = Helpers.sanitizeText(query).toLowerCase();
                     businesses = businesses.filter(business => 
                         business.name.toLowerCase().includes(queryLower) ||
                         business.address.toLowerCase().includes(queryLower)
@@ -590,37 +869,73 @@ const SearchService = {
                 }
             }
             
-            // إذا لم تكن هناك نتائج، استخدم البيانات الوهمية
+            // استخدام البيانات الوهمية كملاذ أخير
             if (businesses.length === 0) {
                 console.log('Using backup data...');
                 businesses = BackupData.filterBackupData(query, category);
+                
+                // إضافة مسافة للمستخدم إذا كان هناك موقع
+                if (location && businesses.length > 0) {
+                    const [userLat, userLon] = location.split(',').map(Number);
+                    businesses.forEach(business => {
+                        if (business.lat && business.lng) {
+                            business.distance = Helpers.calculateDistance(
+                                userLat, userLon,
+                                business.lat, business.lng
+                            );
+                        }
+                    });
+                }
             }
             
-            // تخزين نتائج البحث الأخيرة
-            window.lastSearchResults = businesses;
+            // تخزين نتائج البحث الأخيرة مع تمييز المصدر
+            window.lastSearchResults = businesses.map(b => ({
+                ...b,
+                searchTime: new Date().toISOString(),
+                searchQuery: query,
+                searchCategory: category
+            }));
+            
+            // تنظيف التخزين المؤقت القديم
+            setTimeout(() => CacheManager.cleanup(), 1000);
             
             return businesses;
         } catch (error) {
             console.error('Error in searchBusinesses:', error);
+            // العودة إلى البيانات الوهمية في حالة الخطأ
             return BackupData.filterBackupData(query, category);
         }
     },
 
-    // دالة الحصول على البيانات المميزة
+    // دالة الحصول على البيانات المميزة مع تحسينات
     getFeaturedBusinesses: async () => {
         try {
+            const cacheKey = 'featured_businesses';
+            const cached = CacheManager.get(cacheKey);
+            if (cached) return cached;
+
+            // محاولة الحصول على بيانات من APIs
             const featured = await SearchService.searchBusinesses('', 'hospital', API_CONFIG.DEFAULT_LOCATION, 10000);
             
+            let result;
             if (featured.length >= 3) {
-                return featured.slice(0, 3).map(business => ({
+                result = featured.slice(0, 3).map(business => ({
                     ...business,
-                    featured: true
+                    featured: true,
+                    isFeatured: true
                 }));
+            } else {
+                result = backupBusinessesData
+                    .filter(business => business.featured)
+                    .slice(0, 3)
+                    .map(business => ({
+                        ...business,
+                        isFeatured: true
+                    }));
             }
             
-            return backupBusinessesData
-                .filter(business => business.featured)
-                .slice(0, 3);
+            CacheManager.set(cacheKey, result, 600000); // 10 دقائق
+            return result;
         } catch (error) {
             console.error('Error getting featured businesses:', error);
             return backupBusinessesData
@@ -629,28 +944,80 @@ const SearchService = {
         }
     },
 
-    // دالة الحصول على تفاصيل مؤسسة
+    // دالة الحصول على تفاصيل مؤسسة مع تحسينات
     getBusinessDetails: async (businessId, source = 'backup') => {
         try {
-            if (source === 'google' && API_CONFIG.GOOGLE_API_KEY && API_CONFIG.GOOGLE_API_KEY !== 'YOUR_GOOGLE_API_KEY') {
-                const details = await GooglePlacesAPI.getPlaceDetails(businessId);
-                if (details) return details;
+            const cacheKey = `details_${businessId}_${source}`;
+            const cached = CacheManager.get(cacheKey);
+            if (cached) return cached;
+
+            // التعامل مع معرفات Google Places
+            if (businessId.startsWith('google_') && source === 'google') {
+                const placeId = businessId.replace('google_', '');
+                const details = await GooglePlacesAPI.getPlaceDetails(placeId);
+                if (details) {
+                    CacheManager.set(cacheKey, details);
+                    return details;
+                }
+            }
+            
+            // التعامل مع معرفات OSM
+            if (businessId.startsWith('osm_') && source === 'osm') {
+                // البحث في نتائج البحث الأخيرة
+                if (window.lastSearchResults) {
+                    const found = window.lastSearchResults.find(b => b.id === businessId);
+                    if (found) {
+                        CacheManager.set(cacheKey, found);
+                        return found;
+                    }
+                }
             }
             
             // البحث في البيانات الوهمية
-            const business = backupBusinessesData.find(b => b.id === businessId);
-            if (business) return business;
+            const business = BackupData.getBusinessById(parseInt(businessId));
+            if (business) {
+                CacheManager.set(cacheKey, business);
+                return business;
+            }
             
             // البحث في نتائج البحث السابقة
             if (window.lastSearchResults) {
-                const found = window.lastSearchResults.find(b => b.id === businessId);
-                if (found) return found;
+                const found = window.lastSearchResults.find(b => 
+                    b.id === businessId || b.id === parseInt(businessId)
+                );
+                if (found) {
+                    CacheManager.set(cacheKey, found);
+                    return found;
+                }
             }
             
             return null;
         } catch (error) {
             console.error('Error getting business details:', error);
             return null;
+        }
+    },
+
+    // البحث عن موقع بالعنوان
+    searchLocationByAddress: async (address) => {
+        try {
+            const results = await NominatimAPI.search(address);
+            if (results.length > 0) {
+                return results.map(result => ({
+                    name: result.display_name,
+                    lat: result.lat,
+                    lng: result.lon,
+                    address: {
+                        city: result.address.city || result.address.town || result.address.village,
+                        country: result.address.country,
+                        country_code: result.address.country_code
+                    }
+                }));
+            }
+            return [];
+        } catch (error) {
+            console.error('Error searching location:', error);
+            return [];
         }
     }
 };
@@ -669,6 +1036,9 @@ window.BusinessDataModule = {
     searchBusinesses: SearchService.searchBusinesses,
     getFeaturedBusinesses: SearchService.getFeaturedBusinesses,
     getBusinessDetails: SearchService.getBusinessDetails,
+    searchLocation: SearchService.searchLocationByAddress,
+    reverseGeocode: NominatimAPI.reverse,
+    getAddressFromCoords: NominatimAPI.getAddressFromCoords,
     
     // خدمات API
     searchWithNominatim: NominatimAPI.search,
@@ -678,14 +1048,37 @@ window.BusinessDataModule = {
     getCategoryName: Helpers.getCategoryName,
     generateRatingStars: Helpers.generateRatingStars,
     formatBusinessHours: Helpers.formatBusinessHours,
+    calculateDistance: Helpers.calculateDistance,
+    sanitizeText: Helpers.sanitizeText,
+    
+    // نظام التخزين المؤقت
+    cacheManager: CacheManager,
     
     // إصدار الملف
-    version: '1.0.0',
-    lastUpdated: '2024-12-23'
+    version: '2.1.0',
+    lastUpdated: '2024-12-23',
+    
+    // التهيئة
+    init: function() {
+        console.log('Business Data Module initialized - Version:', this.version);
+        // تنظيف التخزين المؤقت كل 10 دقائق
+        setInterval(() => CacheManager.cleanup(), 600000);
+        return this;
+    }
 };
+
+// تهيئة تلقائية
+if (typeof window !== 'undefined') {
+    window.BusinessDataModule.init();
+}
 
 // تصدير للتوافق مع الكود القديم
 window.businessDataModule = window.BusinessDataModule;
 window.backupBusinessesData = backupBusinessesData;
+
+// تصدير للاستخدام في البيئات المختلفة
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = window.BusinessDataModule;
+}
 
 console.log('Business Data Module loaded successfully - Version:', window.BusinessDataModule.version);
