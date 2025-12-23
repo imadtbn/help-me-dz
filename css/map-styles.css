@@ -1,0 +1,140 @@
+/* تخصيص علامات الخريطة */
+.map-marker {
+    background-color: white;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    position: relative;
+    transition: transform 0.3s ease;
+}
+
+.map-marker:hover {
+    transform: scale(1.2);
+}
+
+.map-marker i {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+}
+
+.map-marker.hospital i {
+    color: var(--danger-color);
+}
+
+.map-marker.pharmacy i {
+    color: var(--success-color);
+}
+
+.map-marker.clinic i {
+    color: var(--secondary-color);
+}
+
+.map-marker.doctor i {
+    color: var(--primary-dark);
+}
+
+.map-marker.association i {
+    color: var(--accent-color);
+}
+
+.marker-label {
+    position: absolute;
+    top: 100%;
+    right: 50%;
+    transform: translateX(50%);
+    background-color: white;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    display: none;
+}
+
+.map-marker:hover .marker-label {
+    display: block;
+}
+
+.user-location-marker {
+    background-color: var(--primary-color);
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: pulse 2s infinite;
+}
+
+.user-location-marker i {
+    color: white;
+    font-size: 1rem;
+}
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(67, 97, 238, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0); }
+}
+
+/* تنسيق نافذة المعلومات على الخريطة */
+.map-popup .leaflet-popup-content-wrapper {
+    border-radius: var(--border-radius);
+    padding: 0;
+    overflow: hidden;
+}
+
+.map-popup .leaflet-popup-content {
+    margin: 0;
+    width: 250px !important;
+}
+
+.map-popup h3 {
+    font-size: 1.1rem;
+    margin-bottom: 10px;
+    color: var(--dark-color);
+}
+
+.map-popup p {
+    font-size: 0.9rem;
+    color: var(--gray-dark);
+    margin-bottom: 15px;
+    line-height: 1.5;
+}
+
+.popup-rating {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 15px;
+}
+
+.popup-rating i {
+    color: var(--warning-color);
+    font-size: 0.9rem;
+}
+
+.popup-rating span {
+    font-weight: 700;
+    color: var(--dark-color);
+}
+
+.popup-btn {
+    width: 100%;
+    padding: 10px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.popup-btn:hover {
+    background-color: var(--primary-dark);
+}
