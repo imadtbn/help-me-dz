@@ -34,6 +34,11 @@
     <!-- PWA Support -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4361ee">
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+
 </head>
 
 <body>
@@ -240,6 +245,7 @@
                     </div>
                 </section>
             </div>
+
 
             <!-- المؤسسات المميزة -->
             <section class="featured-section" aria-labelledby="featured-title">
@@ -489,44 +495,513 @@
     </div>
 
     <!-- تحميل مكتبات JavaScript -->
-     <!-- مكتبة Leaflet للخرائط (يجب أن تكون أولاً) -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- ملفات JavaScript مرتبة حسب التبعيات -->
+    <!-- تحميل مكتبات JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<script src="js/main.js"></script>
-<script src="js/data.js"></script>
-<script src="js/config.js"></script>
-<script src="js/map.js"></script>
-<script src="js/stats.js"></script>
+    <!-- ملفات JavaScript الرئيسية -->
+    <script src="js/config.js"></script>
+    <script src="js/data.service.js"></script>
+    <script src="js/search.engine.js"></script>
+    <script src="js/map.manager.js"></script>
+    <script src="js/stats.manager.js"></script>
 
+    <script src="js/app.js"></script>
 
-<!-- تهيئة التطبيق بعد تحميل الصفحة -->
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // تأكد من تحميل جميع الملفات
-        if (window.CONFIG && window.BusinessDataModule && window.mapModule) {
-            console.log('✅ جميع الملفات محملة بنجاح');
-            
-            // هنا يمكنك وضع كود تهيئة إضافي
-            if (typeof initApp === 'function') {
-                initApp();
+    <!-- تهيئة التطبيق -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            try {
+                // التحقق من توفر Leaflet
+                if (typeof L === 'undefined') {
+                    console.error('❌ مكتبة Leaflet لم تحمل');
+                    showError('تعذر تحميل الخريطة. يرجى تحديث الصفحة.');
+                    return;
+                }
+
+                // تهيئة التطبيق
+                if (typeof initApp === 'function') {
+                    initApp();
+                } else {
+                    // تهيئة بديلة إذا لم يكن app.js محملاً
+                    initBackupApp();
+                }
+
+                console.log('✅ تم تحميل التطبيق بنجاح');
+            } catch (error) {
+                console.error('❌ خطأ في تهيئة التطبيق:', error);
+                showError('حدث خطأ في تحميل التطبيق: ' + error.message);
             }
-        } else {
-            console.error('❌ بعض الملفات لم تحمل بشكل صحيح');
-            
-            // محاولة إعادة تحميل الملفات المفقودة
-            if (!window.CONFIG) {
-                console.warn('⚠️ ملف config.js لم يحمل');
+        });
+
+        // تهيئة احتياطية
+        function initBackupApp() {
+            console.log('⚡ استخدام تهيئة احتياطية');
+
+            // تهيئة الخريطة
+            if (typeof initMap === 'function') {
+                initMap();
             }
-            if (!window.BusinessDataModule) {
-                console.warn('⚠️ ملف data.js لم يحمل');
-            }
-            if (!window.mapModule) {
-                console.warn('⚠️ ملف map.js لم يحمل');
+
+            // تهيئة القائمة المتنقلة
+            initMobileMenu();
+
+            // تهيئة البحث
+            initSearch();
+
+            // تحميل البيانات
+            loadBusinessesData();
+        }
+
+        // وظائف مساعدة
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'global-error';
+            errorDiv.innerHTML = `
+        <div class="error-content">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>${message}</p>
+            <button onclick="location.reload()" class="btn-retry">
+                <i class="fas fa-redo"></i> إعادة تحميل الصفحة
+            </button>
+        </div>
+    `;
+            document.body.appendChild(errorDiv);
+        }
+
+        // تهيئة القائمة المتنقلة
+        function initMobileMenu() {
+            const toggleBtn = document.getElementById('mobile-menu-toggle');
+            const navLinks = document.getElementById('main-nav');
+
+            if (toggleBtn && navLinks) {
+                toggleBtn.addEventListener('click', function () {
+                    const isExpanded = this.getAttribute('aria-expanded') === 'true';
+                    this.setAttribute('aria-expanded', !isExpanded);
+                    navLinks.classList.toggle('show');
+                });
             }
         }
-    });
-</script>
+
+        // تهيئة البحث الأساسي
+        function initSearch() {
+            const searchBtn = document.getElementById('search-btn');
+            const searchForm = document.getElementById('search-form');
+
+            if (searchForm) {
+                searchForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    performSearch();
+                });
+            }
+
+            if (searchBtn) {
+                searchBtn.addEventListener('click', performSearch);
+            }
+        }
+
+        // تنفيذ البحث
+        function performSearch() {
+            const searchInput = document.getElementById('main-search');
+            const locationInput = document.getElementById('location-search');
+            const categorySelect = document.getElementById('category-select');
+
+            const query = {
+                keyword: searchInput ? searchInput.value : '',
+                location: locationInput ? locationInput.value : '',
+                category: categorySelect ? categorySelect.value : ''
+            };
+
+            console.log('🔍 بحث:', query);
+
+            // هنا سيتم استدعاء محرك البحث
+            if (typeof window.SearchEngine !== 'undefined') {
+                window.SearchEngine.search(query);
+            } else {
+                console.warn('محرك البحث غير متوفر، استخدام البحث المحلي');
+                localSearch(query);
+            }
+        }
+
+        // بحث محلي بديل
+        function localSearch(query) {
+            // سيتم تنفيذ البحث على البيانات المحلية
+            console.log('بحث محلي:', query);
+        }
+
+        // تحميل بيانات المؤسسات
+        function loadBusinessesData() {
+            // محاولة تحميل البيانات من الملفات
+            if (typeof window.BusinessDataService !== 'undefined') {
+                window.BusinessDataService.loadData();
+            } else {
+                console.warn('خدمة البيانات غير متوفرة، استخدام بيانات احتياطية');
+                loadBackupData();
+            }
+        }
+
+        // تحميل بيانات احتياطية
+        function loadBackupData() {
+            // بيانات اختبارية أساسية
+            const backupData = [
+                {
+                    id: 1,
+                    name: "مستشفى مصطفى باشا الجامعي",
+                    category: "hospital",
+                    address: "الجزائر العاصمة",
+                    lat: 36.7631,
+                    lng: 3.0506,
+                    phone: ["021 23 45 67"],
+                    rating: 4.2,
+                    featured: true
+                },
+                {
+                    id: 2,
+                    name: "صيدلية الأمل",
+                    category: "pharmacy",
+                    address: "حي النصر، الجزائر",
+                    lat: 36.7489,
+                    lng: 3.0588,
+                    phone: ["021 34 56 78"],
+                    rating: 4.5,
+                    featured: true
+                }
+            ];
+
+            // تخزين البيانات للاستخدام
+            window.backupBusinessesData = backupData;
+
+            // عرض البيانات
+            displayBusinesses(backupData);
+            displayFeaturedBusinesses(backupData.filter(b => b.featured));
+            updateStatistics(backupData);
+        }
+
+        // عرض المؤسسات
+        function displayBusinesses(businesses) {
+            const resultsContainer = document.getElementById('business-results');
+            if (!resultsContainer || !businesses) return;
+
+            if (businesses.length === 0) {
+                resultsContainer.innerHTML = `
+            <div class="no-results">
+                <i class="fas fa-search" aria-hidden="true"></i>
+                <p>لا توجد نتائج للبحث</p>
+            </div>
+        `;
+                return;
+            }
+
+            let html = '';
+            businesses.forEach(business => {
+                html += createBusinessCard(business);
+            });
+
+            resultsContainer.innerHTML = html;
+            document.getElementById('results-count').textContent = businesses.length;
+        }
+
+        // إنشاء بطاقة المؤسسة
+        function createBusinessCard(business) {
+            const stars = generateRatingStars(business.rating || 0);
+            const categoryName = getCategoryName(business.category);
+            const icon = getCategoryIcon(business.category);
+
+            return `
+        <div class="business-card" data-id="${business.id}" data-category="${business.category}">
+            <div class="business-card-header">
+                <div class="business-category">
+                    <i class="${icon}"></i>
+                    <span>${categoryName}</span>
+                </div>
+                ${business.featured ? '<span class="featured-badge">مميز</span>' : ''}
+            </div>
+            
+            <div class="business-card-body">
+                <h3 class="business-name">${business.name}</h3>
+                <div class="business-info">
+                    <div class="business-address">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${business.address || 'عنوان غير محدد'}</span>
+                    </div>
+                    ${business.phone && business.phone.length > 0 ? `
+                    <div class="business-phone">
+                        <i class="fas fa-phone"></i>
+                        <span>${business.phone[0]}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                
+                <div class="business-rating">
+                    <div class="stars">${stars}</div>
+                    <span class="rating-value">${business.rating ? business.rating.toFixed(1) : '0.0'}</span>
+                </div>
+            </div>
+            
+            <div class="business-card-actions">
+                <button class="btn-action btn-call" onclick="callNumber('${business.phone && business.phone[0] ? business.phone[0] : ''}')">
+                    <i class="fas fa-phone"></i> اتصل
+                </button>
+                <button class="btn-action btn-directions" onclick="showDirections(${business.lat}, ${business.lng})">
+                    <i class="fas fa-directions"></i> اتجاهات
+                </button>
+                <button class="btn-action btn-details" onclick="showBusinessDetails(${business.id})">
+                    <i class="fas fa-info-circle"></i> تفاصيل
+                </button>
+            </div>
+        </div>
+    `;
+        }
+
+        // عرض المؤسسات المميزة
+        function displayFeaturedBusinesses(businesses) {
+            const featuredContainer = document.getElementById('featured-grid');
+            if (!featuredContainer || !businesses) return;
+
+            if (businesses.length === 0) {
+                featuredContainer.innerHTML = '<p class="no-featured">لا توجد مؤسسات مميزة حالياً</p>';
+                return;
+            }
+
+            let html = '';
+            businesses.slice(0, 4).forEach(business => {
+                const stars = generateRatingStars(business.rating || 0);
+                const icon = getCategoryIcon(business.category);
+
+                html += `
+            <div class="featured-card" data-id="${business.id}">
+                <div class="featured-card-header">
+                    <div class="featured-icon">
+                        <i class="${icon}"></i>
+                    </div>
+                    <div class="featured-rating">
+                        ${stars}
+                        <span>${business.rating ? business.rating.toFixed(1) : '0.0'}</span>
+                    </div>
+                </div>
+                <div class="featured-card-body">
+                    <h3>${business.name}</h3>
+                    <p class="featured-address">${business.address || ''}</p>
+                </div>
+                <div class="featured-card-footer">
+                    <button class="btn-view-details" onclick="showBusinessDetails(${business.id})">
+                        <i class="fas fa-eye"></i> عرض التفاصيل
+                    </button>
+                </div>
+            </div>
+        `;
+            });
+
+            featuredContainer.innerHTML = html;
+        }
+
+        // تحديث الإحصائيات
+        function updateStatistics(businesses) {
+            if (!businesses) return;
+
+            const stats = {
+                hospital: businesses.filter(b => b.category === 'hospital').length,
+                clinic: businesses.filter(b => b.category === 'clinic').length,
+                pharmacy: businesses.filter(b => b.category === 'pharmacy').length,
+                doctor: businesses.filter(b => b.category === 'doctor').length,
+                total: businesses.length,
+                featured: businesses.filter(b => b.featured).length,
+                cities: new Set(businesses.map(b => b.address?.split(',')[0]).filter(Boolean)).size,
+                reviews: businesses.reduce((sum, b) => sum + (b.reviewCount || 0), 0),
+                avgRating: businesses.length > 0
+                    ? (businesses.reduce((sum, b) => sum + (b.rating || 0), 0) / businesses.length).toFixed(1)
+                    : '0.0'
+            };
+
+            // تحديث العناصر
+            const elements = {
+                'hospital-count': stats.hospital,
+                'clinic-count': stats.clinic,
+                'pharmacy-count': stats.pharmacy,
+                'doctor-count': stats.doctor
+            };
+
+            Object.entries(elements).forEach(([id, value]) => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = value;
+            });
+
+            // تحديث الإحصائيات الإضافية
+            const additionalStats = document.querySelectorAll('.additional-stat');
+            if (additionalStats.length >= 4) {
+                additionalStats[0].querySelector('.stat-value').textContent = stats.featured;
+                additionalStats[1].querySelector('.stat-value').textContent = stats.cities;
+                additionalStats[2].querySelector('.stat-value').textContent = stats.reviews;
+                additionalStats[3].querySelector('.stat-value').textContent = stats.avgRating;
+            }
+        }
+
+        // دوال مساعدة
+        function generateRatingStars(rating) {
+            const fullStars = Math.floor(rating);
+            const halfStar = rating % 1 >= 0.5;
+            const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+
+            let stars = '';
+            for (let i = 0; i < fullStars; i++) {
+                stars += '<i class="fas fa-star"></i>';
+            }
+            if (halfStar) {
+                stars += '<i class="fas fa-star-half-alt"></i>';
+            }
+            for (let i = 0; i < emptyStars; i++) {
+                stars += '<i class="far fa-star"></i>';
+            }
+            return stars;
+        }
+
+        function getCategoryName(category) {
+            const names = {
+                'hospital': 'مستشفى',
+                'clinic': 'عيادة',
+                'pharmacy': 'صيدلية',
+                'doctor': 'طبيب',
+                'dentist': 'طبيب أسنان',
+                'laboratory': 'مختبر',
+                'association': 'جمعية'
+            };
+            return names[category] || 'مؤسسة';
+        }
+
+        function getCategoryIcon(category) {
+            const icons = {
+                'hospital': 'fas fa-hospital',
+                'clinic': 'fas fa-clinic-medical',
+                'pharmacy': 'fas fa-prescription-bottle-alt',
+                'doctor': 'fas fa-user-md',
+                'dentist': 'fas fa-tooth',
+                'laboratory': 'fas fa-flask',
+                'association': 'fas fa-hands-helping'
+            };
+            return icons[category] || 'fas fa-building';
+        }
+
+        // دوال تفاعل
+        function callNumber(phone) {
+            if (!phone) {
+                alert('رقم الهاتف غير متوفر');
+                return;
+            }
+            window.open(`tel:${phone}`, '_blank');
+        }
+
+        function showDirections(lat, lng) {
+            if (!lat || !lng) {
+                alert('إحداثيات المكان غير متوفرة');
+                return;
+            }
+            window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+        }
+
+        function showBusinessDetails(id) {
+            const business = window.backupBusinessesData?.find(b => b.id === id);
+            if (!business) {
+                alert('تفاصيل المؤسسة غير متوفرة');
+                return;
+            }
+
+            // عرض النافذة المنبثقة
+            const modal = document.getElementById('business-detail-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const modalBody = document.getElementById('modal-body');
+
+            if (modal && modalTitle && modalBody) {
+                modalTitle.textContent = business.name;
+
+                const stars = generateRatingStars(business.rating || 0);
+                const categoryName = getCategoryName(business.category);
+
+                modalBody.innerHTML = `
+            <div class="business-detail">
+                <div class="detail-header">
+                    <div class="detail-category">
+                        <i class="${getCategoryIcon(business.category)}"></i>
+                        <span>${categoryName}</span>
+                    </div>
+                    <div class="detail-rating">
+                        ${stars}
+                        <span class="rating-value">${business.rating ? business.rating.toFixed(1) : '0.0'}</span>
+                    </div>
+                </div>
+                
+                <div class="detail-info">
+                    <div class="info-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${business.address || 'عنوان غير محدد'}</span>
+                    </div>
+                    
+                    ${business.phone && business.phone.length > 0 ? `
+                    <div class="info-item">
+                        <i class="fas fa-phone"></i>
+                        <div class="phone-numbers">
+                            ${business.phone.map(num => `<span class="phone-number">${num}</span>`).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    ${business.email ? `
+                    <div class="info-item">
+                        <i class="fas fa-envelope"></i>
+                        <span>${business.email}</span>
+                    </div>
+                    ` : ''}
+                    
+                    ${business.website ? `
+                    <div class="info-item">
+                        <i class="fas fa-globe"></i>
+                        <a href="${business.website}" target="_blank">${business.website}</a>
+                    </div>
+                    ` : ''}
+                    
+                    ${business.hours ? `
+                    <div class="info-item">
+                        <i class="fas fa-clock"></i>
+                        <span>${business.hours}</span>
+                    </div>
+                    ` : ''}
+                </div>
+                
+                ${business.description ? `
+                <div class="detail-description">
+                    <h4>الوصف:</h4>
+                    <p>${business.description}</p>
+                </div>
+                ` : ''}
+                
+                <div class="detail-actions">
+                    <button class="btn-primary" onclick="callNumber('${business.phone && business.phone[0] ? business.phone[0] : ''}')">
+                        <i class="fas fa-phone"></i> اتصل
+                    </button>
+                    <button class="btn-secondary" onclick="showDirections(${business.lat}, ${business.lng})">
+                        <i class="fas fa-directions"></i> اتجاهات
+                    </button>
+                </div>
+            </div>
+        `;
+
+                modal.style.display = 'block';
+
+                // إغلاق النافذة
+                const closeBtn = modal.querySelector('.close-modal');
+                if (closeBtn) {
+                    closeBtn.onclick = function () {
+                        modal.style.display = 'none';
+                    };
+                }
+
+                // إغلاق بالنقر خارج النافذة
+                modal.onclick = function (e) {
+                    if (e.target === modal) {
+                        modal.style.display = 'none';
+                    }
+                };
+            }
+        }
+    </script>
 
     <!-- Service Worker for PWA -->
     <script>
@@ -534,12 +1009,2868 @@
             window.addEventListener('load', function () {
                 navigator.serviceWorker.register('service-worker.js')
                     .then(function (registration) {
-                        console.log('ServiceWorker registration successful');
+                        console.log('✅ ServiceWorker registration successful');
                     }, function (err) {
-                        console.log('ServiceWorker registration failed: ', err);
+                        console.log('❌ ServiceWorker registration failed: ', err);
                     });
             });
         }
+    </script>
+
+
+    <!-- تهيئة التطبيق بعد تحميل الصفحة -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // تأكد من تحميل جميع الملفات
+            if (window.CONFIG && window.BusinessDataModule && window.mapModule) {
+                console.log('✅ جميع الملفات محملة بنجاح');
+
+                // هنا يمكنك وضع كود تهيئة إضافي
+                if (typeof initApp === 'function') {
+                    initApp();
+                }
+            } else {
+                console.error('❌ بعض الملفات لم تحمل بشكل صحيح');
+
+                // محاولة إعادة تحميل الملفات المفقودة
+                if (!window.CONFIG) {
+                    console.warn('⚠️ ملف config.js لم يحمل');
+                }
+                if (!window.BusinessDataModule) {
+                    console.warn('⚠️ ملف data.js لم يحمل');
+                }
+                if (!window.mapModule) {
+                    console.warn('⚠️ ملف map.js لم يحمل');
+                }
+            }
+        });
+
+        /**
+     * ملف map.js - إدارة الخريطة التفاعلية لموقع ساعدني
+     * يحتوي على جميع وظائف الخريطة والخرائط
+     */
+
+        // متغيرات الخريطة العامة
+        let map = null;
+        let markers = [];
+        let userLocationMarker = null;
+        let userLocation = null;
+        let currentBusinessLayer = null;
+        let directionsControl = null;
+
+        /**
+         * تهيئة الخريطة التفاعلية
+         */
+        function initMap() {
+            try {
+                // التحقق من وجود عنصر الخريطة
+                const mapElement = document.getElementById('map');
+                if (!mapElement) {
+                    console.error('عنصر الخريطة غير موجود');
+                    return;
+                }
+
+                // استخدام إحداثيات الجزائر من الإعدادات
+                const defaultCenter = window.CONFIG ? window.CONFIG.MAP.defaultCenter : [36.7538, 3.0588];
+                const defaultZoom = window.CONFIG ? window.CONFIG.MAP.defaultZoom : 12;
+
+                // إنشاء الخريطة
+                map = L.map('map', {
+                    center: defaultCenter,
+                    zoom: defaultZoom,
+                    zoomControl: false,
+                    attributionControl: true
+                });
+
+                // إضافة طبقة الخريطة الأساسية من OpenStreetMap
+                L.tileLayer(window.CONFIG ? window.CONFIG.APIS.LEAFLET_TILES : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: window.CONFIG ? window.CONFIG.MAP.maxZoom : 18,
+                    minZoom: window.CONFIG ? window.CONFIG.MAP.minZoom : 8,
+                    detectRetina: true
+                }).addTo(map);
+
+                // إضافة عناصر التحكم بالتكبير في الزاوية اليسرى العليا
+                L.control.zoom({
+                    position: 'topleft'
+                }).addTo(map);
+
+                // إضافة مقياس المسافة
+                L.control.scale({
+                    position: 'bottomleft',
+                    imperial: false,
+                    metric: true
+                }).addTo(map);
+
+                // إضافة علامات المؤسسات الافتراضية
+                addBusinessMarkers(window.backupBusinessesData || []);
+
+                // إعداد التحكمات الإضافية
+                setupMapControls();
+
+                // إعداد مستمعي الأحداث للخريطة
+                setupMapEvents();
+
+                console.log('تم تهيئة الخريطة بنجاح');
+
+                // إرجاع كائن الخريطة للاستخدام الخارجي
+                return map;
+
+            } catch (error) {
+                console.error('خطأ في تهيئة الخريطة:', error);
+                showMapError('تعذر تحميل الخريطة. يرجى تحديث الصفحة.');
+            }
+        }
+
+        /**
+         * إضافة علامات المؤسسات على الخريطة
+         * @param {Array} businesses - مصفوفة المؤسسات
+         */
+        function addBusinessMarkers(businesses) {
+            try {
+                // إزالة العلامات السابقة
+                clearMarkers();
+
+                if (!businesses || businesses.length === 0) {
+                    showNoResultsOnMap();
+                    return;
+                }
+
+                // إنشاء مجموعة للعلامات
+                const markerGroup = L.layerGroup().addTo(map);
+
+                // إضافة علامة لكل مؤسسة
+                businesses.forEach(business => {
+                    if (business.lat && business.lng && !isNaN(business.lat) && !isNaN(business.lng)) {
+                        const marker = createBusinessMarker(business);
+                        if (marker) {
+                            marker.addTo(markerGroup);
+                            markers.push(marker);
+                        }
+                    }
+                });
+
+                // تمركز الخريطة على جميع العلامات
+                if (markers.length > 0) {
+                    const bounds = L.latLngBounds(markers.map(m => m.getLatLng()));
+                    map.fitBounds(bounds, {
+                        padding: [50, 50],
+                        maxZoom: 15
+                    });
+                }
+
+                // حفظ مجموعة العلامات الحالية
+                currentBusinessLayer = markerGroup;
+
+            } catch (error) {
+                console.error('خطأ في إضافة علامات المؤسسات:', error);
+            }
+        }
+
+        /**
+         * إنشاء علامة لمؤسسة واحدة
+         * @param {Object} business - بيانات المؤسسة
+         * @returns {L.Marker} علامة المؤسسة
+         */
+        function createBusinessMarker(business) {
+            try {
+                const icon = L.divIcon({
+                    html: `
+                <div class="map-marker ${business.category}" data-business-id="${business.id}">
+                    <i class="${getCategoryIcon(business.category)}"></i>
+                    <div class="marker-pulse"></div>
+                </div>
+            `,
+                    className: 'custom-div-icon',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 40],
+                    popupAnchor: [0, -40]
+                });
+
+                const marker = L.marker([business.lat, business.lng], {
+                    icon: icon,
+                    title: business.name,
+                    alt: business.name,
+                    riseOnHover: true
+                });
+
+                // إضافة نافذة معلومات للمؤسسة
+                const popupContent = createPopupContent(business);
+                marker.bindPopup(popupContent, {
+                    maxWidth: 300,
+                    minWidth: 250,
+                    className: 'business-popup',
+                    closeButton: true,
+                    autoClose: false,
+                    closeOnEscapeKey: true
+                });
+
+                // إضافة حدث النقر على العلامة
+                marker.on('click', function () {
+                    highlightBusinessMarker(marker);
+                    showBusinessDetails(business.id);
+
+                    // تسجيل حدث النقر للتحليلات
+                    if (typeof gtag !== 'undefined') {
+                        gtag('event', 'map_marker_click', {
+                            'business_id': business.id,
+                            'business_name': business.name,
+                            'category': business.category
+                        });
+                    }
+                });
+
+                // إضافة تأثيرات التفاعل
+                marker.on('mouseover', function () {
+                    this.openPopup();
+                    marker.setZIndexOffset(1000);
+                });
+
+                marker.on('mouseout', function () {
+                    if (!this._popup._isOpen) {
+                        this.closePopup();
+                    }
+                });
+
+                return marker;
+
+            } catch (error) {
+                console.error('خطأ في إنشاء علامة المؤسسة:', error);
+                return null;
+            }
+        }
+
+        /**
+         * إنشاء محتوى نافذة المعلومات للمؤسسة
+         * @param {Object} business - بيانات المؤسسة
+         * @returns {String} HTML للنافذة المنبثقة
+         */
+        function createPopupContent(business) {
+            const ratingStars = generateRatingStars(business.rating);
+            const categoryName = getCategoryName(business.category);
+
+            return `
+        <div class="map-popup-content">
+            <div class="popup-header">
+                <h3 class="popup-title">${business.name}</h3>
+                <span class="popup-category">${categoryName}</span>
+            </div>
+            
+            <div class="popup-body">
+                <div class="popup-info">
+                    <div class="popup-address">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${business.address || 'عنوان غير محدد'}</span>
+                    </div>
+                    
+                    ${business.phone && business.phone.length > 0 ? `
+                        <div class="popup-phone">
+                            <i class="fas fa-phone"></i>
+                            <span>${business.phone[0]}</span>
+                        </div>
+                    ` : ''}
+                    
+                    <div class="popup-rating">
+                        <div class="stars">${ratingStars}</div>
+                        <span class="rating-value">${business.rating.toFixed(1)}</span>
+                    </div>
+                </div>
+                
+                <div class="popup-actions">
+                    <button class="popup-btn btn-call" onclick="callNumber('${business.phone && business.phone[0] ? business.phone[0] : ''}'); event.stopPropagation();">
+                        <i class="fas fa-phone"></i> اتصل
+                    </button>
+                    <button class="popup-btn btn-directions" onclick="getDirections(${business.lat}, ${business.lng}); event.stopPropagation();">
+                        <i class="fas fa-directions"></i> اتجاهات
+                    </button>
+                    <button class="popup-btn btn-details" onclick="showBusinessDetails('${business.id}'); event.stopPropagation();">
+                        <i class="fas fa-info-circle"></i> تفاصيل
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+        }
+
+        /**
+         * إعداد تحكمات الخريطة الإضافية
+         */
+        function setupMapControls() {
+            // التحكم في التكبير يدوياً
+            const zoomInBtn = document.getElementById('zoom-in');
+            const zoomOutBtn = document.getElementById('zoom-out');
+            const fullscreenBtn = document.getElementById('fullscreen-map');
+            const locateMeBtn = document.getElementById('locate-me');
+
+            if (zoomInBtn) {
+                zoomInBtn.addEventListener('click', () => {
+                    map.zoomIn();
+                    animateButton(zoomInBtn);
+                });
+            }
+
+            if (zoomOutBtn) {
+                zoomOutBtn.addEventListener('click', () => {
+                    map.zoomOut();
+                    animateButton(zoomOutBtn);
+                });
+            }
+
+            if (fullscreenBtn) {
+                fullscreenBtn.addEventListener('click', toggleFullscreen);
+            }
+
+            if (locateMeBtn) {
+                locateMeBtn.addEventListener('click', locateUser);
+            }
+        }
+
+        /**
+         * إعداد أحداث الخريطة
+         */
+        function setupMapEvents() {
+            // حدث تغيير حجم النافذة
+            window.addEventListener('resize', debounce(() => {
+                map.invalidateSize();
+            }, 250));
+
+            // حدث تفاعل مع الخريطة
+            map.on('click', function (e) {
+                console.log('نقرة على الخريطة:', e.latlng);
+            });
+
+            // حدث تحميل الخريطة
+            map.on('load', function () {
+                console.log('تم تحميل الخريطة');
+                document.getElementById('map').classList.add('loaded');
+            });
+
+            // حدث تغيير العرض
+            map.on('zoomend', function () {
+                updateMapBasedOnZoom();
+            });
+        }
+
+        /**
+         * تحديث الخريطة بناءً على مستوى التكبير
+         */
+        function updateMapBasedOnZoom() {
+            const currentZoom = map.getZoom();
+
+            // يمكن إضافة منطق لعرض معلومات مختلفة بناءً على مستوى التكبير
+            if (currentZoom < 10) {
+                // مستوى تكبير منخفض - عرض معلومات أقل
+                markers.forEach(marker => {
+                    if (marker._popup) {
+                        marker._popup.setContent(createSimplePopup(marker.business));
+                    }
+                });
+            } else {
+                // مستوى تكبير عالي - عرض معلومات كاملة
+                markers.forEach(marker => {
+                    if (marker._popup) {
+                        marker._popup.setContent(createPopupContent(marker.business));
+                    }
+                });
+            }
+        }
+
+        /**
+         * إنشاء نافذة معلومات مبسطة
+         */
+        function createSimplePopup(business) {
+            return `
+        <div class="simple-popup">
+            <h4>${business.name}</h4>
+            <p>${getCategoryName(business.category)}</p>
+        </div>
+    `;
+        }
+
+        /**
+         * تحديد موقع المستخدم الحالي
+         */
+        function locateUser() {
+            if (!navigator.geolocation) {
+                alert('المتصفح لا يدعم خدمة تحديد الموقع.');
+                return;
+            }
+
+            const locateBtn = document.getElementById('locate-me');
+            if (locateBtn) {
+                locateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحديد...';
+                locateBtn.disabled = true;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    userLocation = [position.coords.latitude, position.coords.longitude];
+
+                    // إزالة العلامة السابقة لموقع المستخدم
+                    if (userLocationMarker) {
+                        map.removeLayer(userLocationMarker);
+                    }
+
+                    // إنشاء علامة موقع المستخدم
+                    userLocationMarker = L.marker(userLocation, {
+                        icon: L.divIcon({
+                            html: '<div class="user-location-marker"><i class="fas fa-location-arrow"></i></div>',
+                            className: 'user-location-div-icon',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 30]
+                        }),
+                        zIndexOffset: 1000,
+                        title: 'موقعك الحالي',
+                        alt: 'موقعك الحالي'
+                    }).addTo(map);
+
+                    // إضافة دائرة نصف قطرها لتحديد الدقة
+                    const accuracyCircle = L.circle(userLocation, {
+                        color: '#4361ee',
+                        fillColor: '#4361ee',
+                        fillOpacity: 0.1,
+                        radius: position.coords.accuracy
+                    }).addTo(map);
+
+                    // تكبير الخريطة على موقع المستخدم
+                    map.setView(userLocation, 15);
+
+                    // تحديث زر التحديد
+                    if (locateBtn) {
+                        locateBtn.innerHTML = '<i class="fas fa-location-arrow"></i> موقعي';
+                        locateBtn.disabled = false;
+                    }
+
+                    // إشعار المستخدم
+                    showNotification('تم تحديد موقعك بنجاح', 'success');
+
+                    // تحديث نتائج البحث بناءً على الموقع الجديد
+                    if (typeof filterAndDisplayBusinesses === 'function') {
+                        setTimeout(() => filterAndDisplayBusinesses(), 500);
+                    }
+
+                },
+                function (error) {
+                    console.error('خطأ في تحديد الموقع:', error);
+
+                    let errorMessage = 'تعذر تحديد موقعك. ';
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'تم رفض الإذن.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'معلومات الموقع غير متاحة.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'انتهت مهلة الطلب.';
+                            break;
+                        default:
+                            errorMessage += 'حدث خطأ غير معروف.';
+                    }
+
+                    alert(errorMessage);
+
+                    if (locateBtn) {
+                        locateBtn.innerHTML = '<i class="fas fa-location-arrow"></i> تحديد موقعي';
+                        locateBtn.disabled = false;
+                    }
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        /**
+         * الحصول على اتجاهات من موقع المستخدم إلى الوجهة
+         * @param {number} destLat - خط عرض الوجهة
+         * @param {number} destLng - خط طول الوجهة
+         */
+        function getDirections(destLat, destLng) {
+            let origin;
+
+            if (userLocation) {
+                origin = userLocation;
+            } else {
+                // استخدام مركز الخريطة الحالي إذا لم يكن موقع المستخدم متاحاً
+                origin = map.getCenter();
+
+                // سؤال المستخدم إذا أراد استخدام موقعه
+                if (confirm('لم يتم تحديد موقعك. هل تريد تحديد موقعك للحصول على اتجاهات دقيقة؟')) {
+                    locateUser();
+                    return;
+                }
+            }
+
+            const destination = [destLat, destLng];
+
+            // فتح خدمة الاتجاهات من OpenStreetMap
+            const originStr = `${origin.lat || origin[0]},${origin.lng || origin[1]}`;
+            const destStr = `${destination[0]},${destination[1]}`;
+
+            const directionsUrl = `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${originStr};${destStr}`;
+
+            // فتح في نافذة جديدة
+            window.open(directionsUrl, '_blank', 'noopener,noreferrer');
+
+            // تسجيل حدث الاتجاهات
+            if (typeof gtag !== 'undefined') {
+                gtag('event', 'get_directions', {
+                    'origin': originStr,
+                    'destination': destStr
+                });
+            }
+        }
+
+        /**
+         * إظهار تفاصيل المؤسسة على الخريطة
+         * @param {string} businessId - معرف المؤسسة
+         */
+        function showBusinessOnMap(businessId) {
+            if (!markers || markers.length === 0) return;
+
+            const marker = markers.find(m => m.options.businessId === businessId);
+            if (marker) {
+                // فتح نافذة المعلومات
+                marker.openPopup();
+
+                // تمركز الخريطة على العلامة
+                map.setView(marker.getLatLng(), 15);
+
+                // تسليط الضوء على العلامة
+                highlightBusinessMarker(marker);
+            }
+        }
+
+        /**
+         * تسليط الضوء على علامة المؤسسة
+         * @param {L.Marker} marker - علامة المؤسسة
+         */
+        function highlightBusinessMarker(marker) {
+            // إزالة التمييز من جميع العلامات
+            markers.forEach(m => {
+                const iconElement = m.getElement();
+                if (iconElement) {
+                    iconElement.classList.remove('highlighted');
+                }
+            });
+
+            // تمييز العلامة المحددة
+            const iconElement = marker.getElement();
+            if (iconElement) {
+                iconElement.classList.add('highlighted');
+
+                // إضافة تأثير النبض
+                iconElement.classList.add('pulse');
+                setTimeout(() => {
+                    iconElement.classList.remove('pulse');
+                }, 1500);
+            }
+        }
+
+        /**
+         * مسح جميع العلامات من الخريطة
+         */
+        function clearMarkers() {
+            if (currentBusinessLayer) {
+                map.removeLayer(currentBusinessLayer);
+                currentBusinessLayer = null;
+            }
+
+            markers.forEach(marker => {
+                map.removeLayer(marker);
+            });
+
+            markers = [];
+        }
+
+        /**
+         * إظهار رسالة عدم وجود نتائج على الخريطة
+         */
+        function showNoResultsOnMap() {
+            const bounds = map.getBounds();
+            const center = bounds.getCenter();
+
+            const noResultsMarker = L.marker(center, {
+                icon: L.divIcon({
+                    html: `
+                <div class="no-results-marker">
+                    <i class="fas fa-search"></i>
+                    <div class="no-results-text">لا توجد نتائج في هذه المنطقة</div>
+                </div>
+            `,
+                    className: 'no-results-div-icon',
+                    iconSize: [200, 100],
+                    iconAnchor: [100, 50]
+                }),
+                interactive: false
+            }).addTo(map);
+
+            setTimeout(() => {
+                map.removeLayer(noResultsMarker);
+            }, 5000);
+        }
+
+        /**
+         * إظهار خطأ على الخريطة
+         * @param {string} message - رسالة الخطأ
+         */
+        function showMapError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'map-error';
+            errorDiv.innerHTML = `
+        <div class="error-content">
+            <i class="fas fa-exclamation-triangle"></i>
+            <p>${message}</p>
+            <button onclick="initMap()" class="btn-retry">
+                <i class="fas fa-redo"></i> إعادة المحاولة
+            </button>
+        </div>
+    `;
+
+            const mapElement = document.getElementById('map');
+            mapElement.appendChild(errorDiv);
+        }
+
+        /**
+         * تبديل وضع ملء الشاشة للخريطة
+         */
+        function toggleFullscreen() {
+            const mapElement = document.getElementById('map');
+            const fullscreenBtn = document.getElementById('fullscreen-map');
+
+            if (!document.fullscreenElement) {
+                if (mapElement.requestFullscreen) {
+                    mapElement.requestFullscreen();
+                } else if (mapElement.webkitRequestFullscreen) {
+                    mapElement.webkitRequestFullscreen();
+                } else if (mapElement.msRequestFullscreen) {
+                    mapElement.msRequestFullscreen();
+                }
+
+                if (fullscreenBtn) {
+                    fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                    fullscreenBtn.setAttribute('aria-label', 'تصغير الخريطة');
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+
+                if (fullscreenBtn) {
+                    fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                    fullscreenBtn.setAttribute('aria-label', 'تكبير الخريطة إلى ملء الشاشة');
+                }
+            }
+        }
+
+        /**
+         * إضافة تأثير للزر عند النقر
+         * @param {HTMLElement} button - الزر
+         */
+        function animateButton(button) {
+            button.classList.add('clicked');
+            setTimeout(() => {
+                button.classList.remove('clicked');
+            }, 300);
+        }
+
+        /**
+         * وظيفة debounce لتحسين الأداء
+         */
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        /**
+         * إظهار إشعار للمستخدم
+         * @param {string} message - الرسالة
+         * @param {string} type - نوع الإشعار (success, error, info)
+         */
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification notification-${type}`;
+            notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            <span>${message}</span>
+        </div>
+        <button class="notification-close" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+
+            document.body.appendChild(notification);
+
+            // إظهار الإشعار
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 10);
+
+            // إخفاء الإشعار تلقائياً بعد 5 ثواني
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 5000);
+        }
+
+        /**
+         * تصدير الدوال للاستخدام الخارجي
+         */
+        window.MapManager = {
+            initMap,
+            addBusinessMarkers,
+            locateUser,
+            getDirections,
+            showBusinessOnMap,
+            clearMarkers,
+            toggleFullscreen,
+            getMap: () => map,
+            getUserLocation: () => userLocation
+        };
+
+        // تهيئة الخريطة عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', function () {
+            // تأخير تهيئة الخريطة قليلاً لضمان تحميل جميع العناصر
+            setTimeout(() => {
+                if (document.getElementById('map')) {
+                    initMap();
+                }
+            }, 100);
+        });
+
+        // التعامل مع تغيير وضع ملء الشاشة
+        document.addEventListener('fullscreenchange', function () {
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
+        });
+
+        document.addEventListener('webkitfullscreenchange', function () {
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
+        });
+
+        document.addEventListener('msfullscreenchange', function () {
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 300);
+        });
+        /**
+         * ملف stats.js - إدارة وعرض الإحصائيات الديناميكية
+         */
+
+        class StatisticsManager {
+            constructor() {
+                this.counters = {
+                    hospital: 0,
+                    clinic: 0,
+                    pharmacy: 0,
+                    doctor: 0,
+                    total: 0,
+                    featured: 0,
+                    cities: 0,
+                    reviews: 0
+                };
+
+                this.elements = {
+                    hospitalCount: document.getElementById('hospital-count'),
+                    clinicCount: document.getElementById('clinic-count'),
+                    pharmacyCount: document.getElementById('pharmacy-count'),
+                    doctorCount: document.getElementById('doctor-count'),
+                    statsToggleBtn: document.getElementById('stats-toggle-btn'),
+                    additionalStats: document.getElementById('additional-stats')
+                };
+
+                this.init();
+            }
+
+            init() {
+                this.calculateStatistics();
+                this.setupEventListeners();
+            }
+
+            /**
+             * حساب الإحصائيات من البيانات
+             */
+            calculateStatistics() {
+                const businesses = window.backupBusinessesData || [];
+
+                // إعادة تعيين العدادات
+                this.counters = {
+                    hospital: 0,
+                    clinic: 0,
+                    pharmacy: 0,
+                    doctor: 0,
+                    total: businesses.length,
+                    featured: 0,
+                    cities: new Set(),
+                    reviews: 0,
+                    averageRating: 0
+                };
+
+                // حساب الإحصائيات
+                businesses.forEach(business => {
+                    switch (business.category) {
+                        case 'hospital':
+                            this.counters.hospital++;
+                            break;
+                        case 'clinic':
+                            this.counters.clinic++;
+                            break;
+                        case 'pharmacy':
+                            this.counters.pharmacy++;
+                            break;
+                        case 'doctor':
+                            this.counters.doctor++;
+                            break;
+                    }
+
+                    if (business.featured) this.counters.featured++;
+                    if (business.address) this.extractCity(business.address);
+                    if (business.reviewCount) this.counters.reviews += business.reviewCount;
+                    if (business.rating) this.counters.averageRating += business.rating;
+                });
+
+                this.counters.cities = this.counters.cities.size;
+                this.counters.averageRating = businesses.length > 0
+                    ? (this.counters.averageRating / businesses.length).toFixed(1)
+                    : 0;
+
+                this.updateDisplay();
+            }
+
+            /**
+             * استخراج المدينة من العنوان
+             */
+            extractCity(address) {
+                const algerianCities = [
+                    'الجزائر', 'وهران', 'قسنطينة', 'عنابة', 'باتنة', 'بليدة',
+                    'سطيف', 'تيارت', 'البويرة', 'بجاية', 'سيدي بلعباس', 'البيض',
+                    'تيزي وزو', 'غرداية', 'ورقلة', 'تمنراست'
+                ];
+
+                for (const city of algerianCities) {
+                    if (address.includes(city)) {
+                        this.counters.cities.add(city);
+                        break;
+                    }
+                }
+            }
+
+            /**
+             * تحديث العرض مع تأثيرات العد
+             */
+            updateDisplay() {
+                this.animateCounter(this.elements.hospitalCount, this.counters.hospital);
+                this.animateCounter(this.elements.clinicCount, this.counters.clinic);
+                this.animateCounter(this.elements.pharmacyCount, this.counters.pharmacy);
+                this.animateCounter(this.elements.doctorCount, this.counters.doctor);
+
+                // تحديث الإحصائيات الإضافية إذا كانت موجودة
+                this.updateAdditionalStats();
+            }
+
+            /**
+             * تأثير العد المتحرك للأرقام
+             */
+            animateCounter(element, targetValue) {
+                if (!element) return;
+
+                const duration = 2000; // 2 ثانية
+                const frameDuration = 1000 / 60; // 60 إطار في الثانية
+                const totalFrames = Math.round(duration / frameDuration);
+                const easeOutQuad = t => t * (2 - t);
+
+                let frame = 0;
+                const countTo = targetValue;
+                const elementText = element.textContent;
+                const currentValue = parseInt(elementText.replace(/,/g, '')) || 0;
+
+                const counter = setInterval(() => {
+                    frame++;
+
+                    const progress = easeOutQuad(frame / totalFrames);
+                    const currentCount = Math.round(countTo * progress);
+
+                    // التأكد من أن العد لا يتجاوز القيمة المستهدفة
+                    const displayValue = Math.min(currentCount, countTo);
+
+                    element.textContent = this.formatNumber(displayValue);
+
+                    // إضافة تأثير أثناء العد
+                    if (frame < totalFrames) {
+                        element.style.transform = `scale(${1 + progress * 0.1})`;
+                        element.style.color = this.getColorForValue(displayValue, countTo);
+                    } else {
+                        element.style.transform = 'scale(1)';
+                        element.style.color = '';
+                        clearInterval(counter);
+
+                        // إضافة تأثير نهائي
+                        this.addCompletionEffect(element);
+                    }
+                }, frameDuration);
+            }
+
+            /**
+             * تنسيق الأرقام (إضافة فواصل)
+             */
+            formatNumber(number) {
+                return number.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            }
+
+            /**
+             * الحصول على لون بناءً على القيمة
+             */
+            getColorForValue(current, total) {
+                const percentage = (current / total) * 100;
+
+                if (percentage < 30) return '#ef476f'; // أحمر
+                if (percentage < 60) return '#ffd166'; // أصفر
+                if (percentage < 90) return '#06d6a0'; // أخضر
+                return '#118ab2'; // أزرق
+            }
+
+            /**
+             * إضافة تأثير عند اكتمال العد
+             */
+            addCompletionEffect(element) {
+                element.classList.add('completed');
+
+                // إضافة تأثير النبض
+                setTimeout(() => {
+                    element.classList.remove('completed');
+                }, 1000);
+            }
+
+            /**
+             * تحديث الإحصائيات الإضافية
+             */
+            updateAdditionalStats() {
+                const additionalStats = document.querySelectorAll('.additional-stat');
+
+                if (additionalStats.length > 0) {
+                    // المؤسسات المميزة
+                    if (additionalStats[0]) {
+                        additionalStats[0].querySelector('.stat-value').textContent =
+                            this.formatNumber(this.counters.featured);
+                    }
+
+                    // المدن
+                    if (additionalStats[1]) {
+                        additionalStats[1].querySelector('.stat-value').textContent =
+                            this.formatNumber(this.counters.cities);
+                    }
+
+                    // التقييمات
+                    if (additionalStats[2]) {
+                        additionalStats[2].querySelector('.stat-value').textContent =
+                            this.formatNumber(this.counters.reviews);
+                    }
+
+                    // متوسط التقييم
+                    if (additionalStats[3]) {
+                        additionalStats[3].querySelector('.stat-value').textContent =
+                            this.counters.averageRating;
+                    }
+                }
+            }
+
+            /**
+             * إعداد مستمعي الأحداث
+             */
+            setupEventListeners() {
+                if (this.elements.statsToggleBtn) {
+                    this.elements.statsToggleBtn.addEventListener('click', () => {
+                        this.toggleAdditionalStats();
+                    });
+                }
+
+                // تحديث الإحصائيات عند إضافة مؤسسة جديدة
+                document.addEventListener('businessAdded', () => {
+                    setTimeout(() => {
+                        this.calculateStatistics();
+                    }, 500);
+                });
+
+                // تحديث الإحصائيات عند البحث
+                document.addEventListener('searchCompleted', (event) => {
+                    if (event.detail && event.detail.results) {
+                        this.updateStatsFromSearch(event.detail.results);
+                    }
+                });
+            }
+
+            /**
+             * تبديل عرض الإحصائيات الإضافية
+             */
+            toggleAdditionalStats() {
+                if (this.elements.additionalStats) {
+                    this.elements.additionalStats.classList.toggle('show');
+                    this.elements.statsToggleBtn.classList.toggle('active');
+
+                    const icon = this.elements.statsToggleBtn.querySelector('i');
+                    if (icon) {
+                        icon.classList.toggle('fa-chevron-down');
+                        icon.classList.toggle('fa-chevron-up');
+                    }
+
+                    // تغيير نص الزر
+                    const isExpanded = this.elements.additionalStats.classList.contains('show');
+                    this.elements.statsToggleBtn.innerHTML = isExpanded
+                        ? '<i class="fas fa-chevron-up"></i> إخفاء التفاصيل'
+                        : '<i class="fas fa-chevron-down"></i> عرض التفاصيل';
+                }
+            }
+
+            /**
+             * تحديث الإحصائيات بناءً على نتائج البحث
+             */
+            updateStatsFromSearch(results) {
+                const searchStats = {
+                    hospital: 0,
+                    clinic: 0,
+                    pharmacy: 0,
+                    doctor: 0
+                };
+
+                results.forEach(business => {
+                    if (searchStats.hasOwnProperty(business.category)) {
+                        searchStats[business.category]++;
+                    }
+                });
+
+                // تحديث العدادات مع تأثير خاص
+                this.updateSearchStats(searchStats);
+            }
+
+            /**
+             * تحديث إحصائيات البحث
+             */
+            updateSearchStats(stats) {
+                // تخزين القيم الأصلية
+                const originalValues = {
+                    hospital: this.counters.hospital,
+                    clinic: this.counters.clinic,
+                    pharmacy: this.counters.pharmacy,
+                    doctor: this.counters.doctor
+                };
+
+                // تحديث العرض مع تأثير الانتقال
+                this.animateTransition(originalValues, stats);
+            }
+
+            /**
+             * تأثير الانتقال بين القيم
+             */
+            animateTransition(original, target) {
+                const elements = {
+                    hospital: this.elements.hospitalCount,
+                    clinic: this.elements.clinicCount,
+                    pharmacy: this.elements.pharmacyCount,
+                    doctor: this.elements.doctorCount
+                };
+
+                Object.keys(elements).forEach(key => {
+                    if (elements[key]) {
+                        elements[key].classList.add('updating');
+                        setTimeout(() => {
+                            this.animateCounter(elements[key], target[key] || 0);
+                            elements[key].classList.remove('updating');
+                        }, 300);
+                    }
+                });
+            }
+
+            /**
+             * الحصول على إحصائيات ككائن
+             */
+            getStatistics() {
+                return {
+                    ...this.counters,
+                    lastUpdated: new Date().toISOString()
+                };
+            }
+
+            /**
+             * تصدير الإحصائيات كـ JSON
+             */
+            exportStatistics() {
+                return JSON.stringify(this.getStatistics(), null, 2);
+            }
+        }
+
+        // تهيئة مدير الإحصائيات عند تحميل الصفحة
+        document.addEventListener('DOMContentLoaded', function () {
+            window.statsManager = new StatisticsManager();
+
+            // تحديث الإحصائيات كل 30 ثانية (للتحديثات الديناميكية)
+            setInterval(() => {
+                if (window.statsManager) {
+                    window.statsManager.calculateStatistics();
+                }
+            }, 30000);
+        });
+
+
+
+        // وظائف إضافية للإحصائيات
+
+        // تحديث وقت آخر تحديث
+        function updateLastUpdateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('ar-EG', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+
+            const dateString = now.toLocaleDateString('ar-EG', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            const updateElement = document.getElementById('last-update');
+            if (updateElement) {
+                updateElement.textContent = `آخر تحديث: ${timeString}`;
+                updateElement.title = `التاريخ: ${dateString}`;
+            }
+        }
+
+        // تصدير الإحصائيات
+        function setupExportButton() {
+            const exportBtn = document.getElementById('export-stats');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', function () {
+                    if (window.statsManager) {
+                        const stats = window.statsManager.exportStatistics();
+                        const blob = new Blob([stats], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `statistics-${new Date().toISOString().split('T')[0]}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+
+                        // إشعار للمستخدم
+                        showNotification('تم تصدير الإحصائيات بنجاح', 'success');
+                    }
+                });
+            }
+        }
+
+        // تحديث المخططات الدائرية
+        function updateProgressCircles() {
+            const circles = document.querySelectorAll('.progress-ring-circle');
+            circles.forEach((circle, index) => {
+                const radius = circle.r.baseVal.value;
+                const circumference = radius * 2 * Math.PI;
+
+                circle.style.strokeDasharray = `${circumference} ${circumference}`;
+                circle.style.strokeDashoffset = circumference;
+
+                // قيمة عشوائية للتجربة (يمكن استبدالها بقيم حقيقية)
+                const progress = [85, 70, 90, 60][index] || 75;
+                const offset = circumference - (progress / 100) * circumference;
+
+                setTimeout(() => {
+                    circle.style.transition = 'stroke-dashoffset 1.5s ease-in-out';
+                    circle.style.strokeDashoffset = offset;
+                }, index * 300);
+            });
+        }
+
+        // تهيئة جميع الوظائف
+        document.addEventListener('DOMContentLoaded', function () {
+            // تحديث وقت التحديث كل ثانية
+            updateLastUpdateTime();
+            setInterval(updateLastUpdateTime, 1000);
+
+            // إعداد زر التصدير
+            setupExportButton();
+
+            // تحديث المخططات الدائرية
+            setTimeout(updateProgressCircles, 1000);
+
+            // تحديث المخططات كل 5 دقائق
+            setInterval(updateProgressCircles, 300000);
+        });
+
+        // ===========================================
+        // تهيئة المتغيرات العامة
+        // ===========================================
+        if (!window.map) {
+            window.map = ... // التهيئة هنا
+        }
+        let markers = [];
+        let userLocationMarker = null;
+        let userLocation = null;
+        let userLocationCircle = null;
+        let businessesData = [];
+
+        // ===========================================
+        // الدوال المساعدة الأساسية
+        // ===========================================
+        function getCategoryIcon(category) {
+            const icons = {
+                'restaurant': 'fas fa-utensils',
+                'cafe': 'fas fa-coffee',
+                'hotel': 'fas fa-hotel',
+                'hospital': 'fas fa-hospital',
+                'pharmacy': 'fas fa-prescription-bottle',
+                'bank': 'fas fa-university',
+                'market': 'fas fa-shopping-cart',
+                'default': 'fas fa-map-marker-alt'
+            };
+            return icons[category] || icons.default;
+        }
+
+        // ===========================================
+        // تهيئة الخريطة
+        // ===========================================
+        function initMap() {
+            try {
+                // إحداثيات الجزائر الوسطى
+                const algeriaCenter = [36.7063956, 3.211357];
+
+                // إنشاء الخريطة
+                map = L.map('map').setView(algeriaCenter, 6);
+
+                // إضافة طبقة الخريطة من OpenStreetMap
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: 19,
+                    noWrap: true
+                }).addTo(map);
+
+                // استخدام البيانات من الوحدة المشتركة
+                businessesData = window.BusinessDataModule?.backupBusinessesData || window.backupBusinessesData || [];
+
+                // إضافة علامات المؤسسات
+                addBusinessMarkers();
+
+                // ضبط التحكم في التكبير
+                setupMapControls();
+
+                console.log('تم تهيئة الخريطة بنجاح');
+            } catch (error) {
+                console.error('خطأ في تهيئة الخريطة:', error);
+                showErrorMessage('تعذر تحميل الخريطة. يرجى تحديث الصفحة.');
+            }
+        }
+
+        // ===========================================
+        // إضافة علامات المؤسسات على الخريطة
+        // ===========================================
+        function addBusinessMarkers() {
+            try {
+                // إزالة العلامات السابقة
+                clearAllMarkers();
+
+                if (!businessesData || businessesData.length === 0) {
+                    console.warn('لا توجد بيانات للمؤسسات');
+                    return;
+                }
+
+                // إضافة علامات جديدة
+                businessesData.forEach(business => {
+                    if (business.lat && business.lng && !isNaN(business.lat) && !isNaN(business.lng)) {
+                        try {
+                            const icon = L.divIcon({
+                                html: `
+                            <div class="map-marker ${business.category}" title="${business.name}">
+                                <i class="${getCategoryIcon(business.category)}"></i>
+                            </div>
+                        `,
+                                className: 'custom-div-icon',
+                                iconSize: [40, 40],
+                                iconAnchor: [20, 40],
+                                popupAnchor: [0, -40]
+                            });
+
+                            const marker = L.marker([business.lat, business.lng], { icon })
+                                .addTo(map)
+                                .bindPopup(createMarkerPopup(business), {
+                                    maxWidth: 300,
+                                    minWidth: 250
+                                });
+
+                            marker.businessId = business.id;
+                            marker.businessData = business;
+                            markers.push(marker);
+                        } catch (markerError) {
+                            console.error(`خطأ في إضافة علامة للمؤسسة ${business.name}:`, markerError);
+                        }
+                    }
+                });
+
+                console.log(`تم إضافة ${markers.length} علامة على الخريطة`);
+            } catch (error) {
+                console.error('خطأ في إضافة العلامات:', error);
+            }
+        }
+
+        // ===========================================
+        // إنشاء نافذة منبثقة للعلامة
+        // ===========================================
+        function createMarkerPopup(business) {
+            const generateRatingStars = window.BusinessDataModule?.generateRatingStars ||
+                window.businessDataModule?.generateRatingStars ||
+                (() => '');
+
+            return `
+        <div class="map-popup">
+            <div class="popup-header">
+                <i class="${getCategoryIcon(business.category)}"></i>
+                <h3>${business.name}</h3>
+            </div>
+            <div class="popup-content">
+                <p class="popup-address">${business.address || 'لا يوجد عنوان'}</p>
+                <div class="popup-rating">
+                    ${generateRatingStars(business.rating || 0)}
+                    <span class="rating-value">${business.rating || 0}</span>
+                </div>
+            </div>
+            <div class="popup-actions">
+                <button class="popup-btn" onclick="showBusinessDetails(${business.id})">
+                    <i class="fas fa-info-circle"></i> التفاصيل
+                </button>
+                <button class="popup-btn" onclick="getDirections(${business.lat}, ${business.lng})">
+                    <i class="fas fa-directions"></i> الاتجاهات
+                </button>
+            </div>
+        </div>
+    `;
+        }
+
+        // ===========================================
+        // إعداد تحكمات الخريطة
+        // ===========================================
+        function setupMapControls() {
+            try {
+                // تكبير
+                const zoomInBtn = document.getElementById('zoom-in');
+                if (zoomInBtn) {
+                    zoomInBtn.addEventListener('click', () => {
+                        map.zoomIn();
+                        updateZoomLevel();
+                    });
+                }
+
+                // تصغير
+                const zoomOutBtn = document.getElementById('zoom-out');
+                if (zoomOutBtn) {
+                    zoomOutBtn.addEventListener('click', () => {
+                        map.zoomOut();
+                        updateZoomLevel();
+                    });
+                }
+
+                // ملء الشاشة
+                const fullscreenBtn = document.getElementById('fullscreen-map');
+                if (fullscreenBtn) {
+                    fullscreenBtn.addEventListener('click', toggleFullscreen);
+                }
+
+                // تحديد موقعي
+                const locateBtn = document.getElementById('locate-me');
+                if (locateBtn) {
+                    locateBtn.addEventListener('click', locateUser);
+                }
+
+                // تحديث مستوى التكبير عند تغييره
+                map.on('zoomend', updateZoomLevel);
+
+                console.log('تم إعداد تحكمات الخريطة');
+            } catch (error) {
+                console.error('خطأ في إعداد تحكمات الخريطة:', error);
+            }
+        }
+
+        // ===========================================
+        // تحديث مستوى التكبير المعروض
+        // ===========================================
+        function updateZoomLevel() {
+            const zoomLevel = document.getElementById('zoom-level');
+            if (zoomLevel && map) {
+                zoomLevel.textContent = `التكبير: ${map.getZoom()}`;
+            }
+        }
+
+        // ===========================================
+        // تبديل وضع ملء الشاشة
+        // ===========================================
+        function toggleFullscreen() {
+            const mapElement = document.getElementById('map');
+
+            if (!document.fullscreenElement) {
+                if (mapElement.requestFullscreen) {
+                    mapElement.requestFullscreen();
+                } else if (mapElement.webkitRequestFullscreen) {
+                    mapElement.webkitRequestFullscreen();
+                } else if (mapElement.msRequestFullscreen) {
+                    mapElement.msRequestFullscreen();
+                }
+
+                // إعادة ضبط حجم الخريطة عند الدخول في وضع ملء الشاشة
+                setTimeout(() => map.invalidateSize(), 300);
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        }
+
+        // ===========================================
+        // تحديد موقع المستخدم
+        // ===========================================
+        function locateUser() {
+            const locateBtn = document.getElementById('locate-me');
+
+            if (!locateBtn) {
+                console.error('زر تحديد الموقع غير موجود');
+                return;
+            }
+
+            // تغيير حالة الزر أثناء التحميل
+            const originalHTML = locateBtn.innerHTML;
+            locateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري تحديد الموقع...';
+            locateBtn.disabled = true;
+
+            // التحقق من دعم المتصفح للموقع الجغرافي
+            if (!navigator.geolocation) {
+                showErrorMessage('متصفحك لا يدعم خدمة تحديد الموقع.');
+                resetLocateButton(locateBtn, originalHTML);
+                return;
+            }
+
+            // خيارات أكثر دقة
+            const options = {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 0
+            };
+
+            // محاولة الحصول على الموقع
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    handleLocationSuccess(position);
+                    resetLocateButton(locateBtn, originalHTML);
+                },
+                (error) => {
+                    handleLocationError(error);
+                    resetLocateButton(locateBtn, originalHTML);
+                },
+                options
+            );
+        }
+
+        // ===========================================
+        // معالجة نجاح تحديد الموقع
+        // ===========================================
+        function handleLocationSuccess(position) {
+            try {
+                userLocation = [position.coords.latitude, position.coords.longitude];
+                const accuracy = position.coords.accuracy || 50;
+
+                // إزالة العلامات السابقة
+                if (userLocationMarker) {
+                    map.removeLayer(userLocationMarker);
+                }
+                if (userLocationCircle) {
+                    map.removeLayer(userLocationCircle);
+                }
+
+                // إضافة علامة موقع المستخدم
+                userLocationMarker = L.marker(userLocation, {
+                    icon: L.divIcon({
+                        html: '<div class="user-location-marker"><i class="fas fa-location-arrow"></i></div>',
+                        className: 'custom-div-icon user-location-icon',
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 40]
+                    }),
+                    zIndexOffset: 1000,
+                    title: 'موقعك الحالي'
+                }).addTo(map);
+
+                // إضافة دائرة توضح دقة الموقع
+                userLocationCircle = L.circle(userLocation, {
+                    color: '#4285f4',
+                    fillColor: '#4285f4',
+                    fillOpacity: 0.2,
+                    radius: accuracy
+                }).addTo(map);
+
+                // تكبير الخريطة على موقع المستخدم
+                map.setView(userLocation, 15);
+
+                // عرض رسالة نجاح
+                showSuccessMessage('تم تحديد موقعك بنجاح!');
+
+                // تحديث البحث حسب الموقع
+                setTimeout(() => {
+                    filterAndDisplayBusinesses();
+                    highlightNearbyBusinesses();
+                }, 500);
+
+                console.log('تم تحديد موقع المستخدم:', userLocation, 'دقة:', accuracy + 'م');
+            } catch (error) {
+                console.error('خطأ في معالجة موقع المستخدم:', error);
+                showErrorMessage('حدث خطأ في معالجة موقعك.');
+            }
+        }
+
+        // ===========================================
+        // معالجة خطأ تحديد الموقع
+        // ===========================================
+        function handleLocationError(error) {
+            let message = 'تعذر الحصول على موقعك.';
+            let details = '';
+
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    message = 'تم رفض الإذن بالوصول إلى الموقع.';
+                    details = 'يرجى السماح بالوصول إلى الموقع في إعدادات المتصفح.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = 'معلومات الموقع غير متوفرة.';
+                    details = 'يرجى التأكد من تفعيل خدمة الموقع على جهازك.';
+                    break;
+                case error.TIMEOUT:
+                    message = 'انتهت المهلة في انتظار الموقع.';
+                    details = 'يرجى المحاولة مرة أخرى في مكان ذي إشارة أفضل.';
+                    break;
+                default:
+                    message = 'حدث خطأ غير معروف أثناء تحديد الموقع.';
+                    details = `خطأ ${error.code}: ${error.message}`;
+            }
+
+            // عرض رسالة تفصيلية
+            showErrorMessage(`${message} ${details}`);
+
+            // اقتراح استخدام موقع افتراضي
+            setTimeout(() => {
+                if (confirm('هل تريد استخدام مركز المدينة كموقع بديل؟')) {
+                    useDefaultLocation();
+                }
+            }, 2000);
+
+            console.error('خطأ في تحديد الموقع:', error);
+        }
+
+        // ===========================================
+        // استخدام موقع افتراضي
+        // ===========================================
+        function useDefaultLocation() {
+            // استخدام موقع المركز التجاري أو المدينة كبديل
+            const defaultLocation = [36.7063956, 3.211357]; // الجزائر الوسطى
+
+            userLocation = defaultLocation;
+            const accuracy = 1000; // دقة افتراضية 1 كم
+
+            // إضافة علامة الموقع الافتراضي
+            userLocationMarker = L.marker(defaultLocation, {
+                icon: L.divIcon({
+                    html: '<div class="user-location-marker default"><i class="fas fa-map-marker-alt"></i></div>',
+                    className: 'custom-div-icon user-location-icon',
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 40]
+                }),
+                zIndexOffset: 1000,
+                title: 'الموقع الافتراضي (مركز المدينة)'
+            }).addTo(map);
+
+            map.setView(defaultLocation, 12);
+            showSuccessMessage('تم استخدام موقع مركز المدينة كبديل.');
+
+            // تحديث البحث حسب الموقع الافتراضي
+            setTimeout(() => {
+                filterAndDisplayBusinesses();
+                highlightNearbyBusinesses();
+            }, 500);
+        }
+
+        // ===========================================
+        // إعادة ضبط زر تحديد الموقع
+        // ===========================================
+        function resetLocateButton(locateBtn, originalHTML) {
+            if (locateBtn) {
+                setTimeout(() => {
+                    locateBtn.innerHTML = originalHTML || '<i class="fas fa-location-arrow"></i> موقعي';
+                    locateBtn.disabled = false;
+                }, 1000);
+            }
+        }
+
+        // ===========================================
+        // إبراز المؤسسات القريبة
+        // ===========================================
+        function highlightNearbyBusinesses() {
+            if (!userLocation) return;
+
+            const radiusSelect = document.getElementById('radius-select');
+            const radius = radiusSelect ? parseInt(radiusSelect.value) * 1000 : 5000;
+
+            markers.forEach(marker => {
+                if (marker.businessData && marker.businessData.lat && marker.businessData.lng) {
+                    const distance = getDistance(
+                        userLocation[0], userLocation[1],
+                        marker.businessData.lat, marker.businessData.lng
+                    );
+
+                    if (distance <= radius) {
+                        // إضافة فئة للعلامات القريبة
+                        marker.getElement()?.classList?.add('nearby-marker');
+                    } else {
+                        marker.getElement()?.classList?.remove('nearby-marker');
+                    }
+                }
+            });
+        }
+
+        // ===========================================
+        // باقي الدوال (تم حذفها للإيجاز ولكن يجب أن تبقى كما هي)
+        // ===========================================
+        // [جميع الدوال الأخرى تبقى كما هي مع تعديلات طفيفة لتعمل مع التغييرات]
+        // مثل: showBusinessDetails, centerMapOnBusiness, displayBusinessDetails, etc.
+
+        // ===========================================
+        // عرض رسائل للمستخدم
+        // ===========================================
+        function showErrorMessage(message) {
+            showMessage(message, 'error');
+        }
+
+        function showSuccessMessage(message) {
+            showMessage(message, 'success');
+        }
+
+        function showMessage(message, type) {
+            // إنشاء عنصر الرسالة إذا لم يكن موجوداً
+            let messageContainer = document.getElementById('message-container');
+            if (!messageContainer) {
+                messageContainer = document.createElement('div');
+                messageContainer.id = 'message-container';
+                document.body.appendChild(messageContainer);
+            }
+
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${type}`;
+            messageElement.innerHTML = `
+        <i class="fas fa-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i>
+        <span>${message}</span>
+        <button class="close-message" onclick="this.parentElement.remove()">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+
+            messageContainer.appendChild(messageElement);
+
+            // إزالة الرسالة تلقائياً بعد 5 ثواني
+            setTimeout(() => {
+                if (messageElement.parentElement) {
+                    messageElement.remove();
+                }
+            }, 5000);
+        }
+
+        // ===========================================
+        // حساب المسافة بين إحداثيين (بالكيلومترات)
+        // ===========================================
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // نصف قطر الأرض بالكيلومتر
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function toRad(value) {
+            return value * Math.PI / 180;
+        }
+
+        // ===========================================
+        // مسح جميع العلامات
+        // ===========================================
+        function clearAllMarkers() {
+            markers.forEach(marker => {
+                if (map) map.removeLayer(marker);
+            });
+            markers = [];
+        }
+
+        // ===========================================
+        // تهيئة الصفحة عند التحميل
+        // ===========================================
+        document.addEventListener('DOMContentLoaded', function () {
+            try {
+                // تهيئة الخريطة
+                initMap();
+
+                // عرض المؤسسات
+                setTimeout(() => {
+                    if (businessesData && businessesData.length > 0) {
+                        displayBusinesses(businessesData);
+                        displayFeaturedBusinesses();
+                        updateResultsCount(businessesData.length);
+                    }
+                }, 500);
+
+                // إضافة مستمعي الأحداث للبحث
+                setupEventListeners();
+
+                // إغلاق النافذة المنبثقة
+                setupModalClose();
+
+                // إعداد القائمة المتنقلة
+                setupMobileMenu();
+
+                console.log('تم تحميل الصفحة بنجاح');
+            } catch (error) {
+                console.error('خطأ في تهيئة الصفحة:', error);
+                showErrorMessage('حدث خطأ في تحميل الصفحة');
+            }
+        });
+
+        // ===========================================
+        // إعداد مستمعي الأحداث
+        // ===========================================
+        function setupEventListeners() {
+            // زر البحث
+            const searchBtn = document.getElementById('search-btn');
+            if (searchBtn) {
+                searchBtn.addEventListener('click', filterAndDisplayBusinesses);
+            }
+
+            // البحث عند الضغط على Enter
+            const mainSearch = document.getElementById('main-search');
+            if (mainSearch) {
+                mainSearch.addEventListener('keyup', function (event) {
+                    if (event.key === 'Enter') {
+                        filterAndDisplayBusinesses();
+                    }
+                });
+            }
+
+            // البحث التلقائي عند تغيير الفلاتر
+            const categorySelect = document.getElementById('category-select');
+            const sortSelect = document.getElementById('sort-select');
+            const radiusSelect = document.getElementById('radius-select');
+            const locationSearch = document.getElementById('location-search');
+
+            if (categorySelect) categorySelect.addEventListener('change', filterAndDisplayBusinesses);
+            if (sortSelect) sortSelect.addEventListener('change', filterAndDisplayBusinesses);
+            if (radiusSelect) radiusSelect.addEventListener('change', filterAndDisplayBusinesses);
+            if (locationSearch) {
+                locationSearch.addEventListener('change', filterAndDisplayBusinesses);
+                locationSearch.addEventListener('keyup', debounce(filterAndDisplayBusinesses, 500));
+            }
+
+            // تحديث الخريطة عند تغيير الحجم
+            window.addEventListener('resize', debounce(() => {
+                if (map) map.invalidateSize();
+            }, 250));
+        }
+
+        // ===========================================
+        // دالة Debounce لتحسين الأداء
+        // ===========================================
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // ===========================================
+        // تصدير الدوال للاستخدام العالمي
+        // ===========================================
+        window.initMap = initMap;
+        window.showBusinessDetails = showBusinessDetails;
+        window.callNumber = callNumber;
+        window.getDirections = getDirections;
+        window.openInGoogleMaps = openInGoogleMaps;
+        window.filterAndDisplayBusinesses = filterAndDisplayBusinesses;
+        window.locateUser = locateUser;
+        window.resetSearch = resetSearch;
+
+        // ===========================================
+        // دوال الاختبار (للأغراض التنموية فقط)
+        // ===========================================
+        console.log('دعم تحديد الموقع:', !!navigator.geolocation);
+
+        // محاكاة النجاح (للاختبار فقط)
+        function simulateSuccess() {
+            handleLocationSuccess({
+                coords: {
+                    latitude: 36.7063956,
+                    longitude: 3.211357,
+                    accuracy: 50
+                }
+            });
+        }
+
+        // محاكاة الخطأ (للاختبار فقط)
+        function simulateError() {
+            handleLocationError({
+                code: 1,
+                message: 'Permission denied'
+            });
+        }
+
+        window.simulateSuccess = simulateSuccess;
+        window.simulateError = simulateError;
+
+        // ===========================================
+        // ملف إعدادات التطبيق (مُحسّن ومُصحّح)
+        // ===========================================
+        const CONFIG = {
+            // =======================================
+            // إعدادات التطبيق
+            // =======================================
+            APP: {
+                name: 'ساعدني',
+                version: '2.0.0',
+                language: 'ar',
+                country: 'الجزائر',
+                direction: 'rtl',
+                theme: 'light', // light | dark | auto
+                enableNotifications: true,
+                enableAnalytics: false,
+                debugMode: false
+            },
+
+            // =======================================
+            // إعدادات API (استبدل بمفاتيحك الفعلية)
+            // =======================================
+            APIS: {
+                GOOGLE: {
+                    key: 'AIzaSyDfJHn5jLQmH0ZkXyV6b8nT7cR9pA2wB3C', // استبدل بمفتاحك الفعلي
+                    places: 'https://maps.googleapis.com/maps/api/place',
+                    geocode: 'https://maps.googleapis.com/maps/api/geocode',
+                    timeout: 10000,
+                    retryAttempts: 3
+                },
+
+                OPENSTREETMAP: {
+                    nominatim: 'https://nominatim.openstreetmap.org/search',
+                    overpass: 'https://overpass-api.de/api/interpreter',
+                    timeout: 15000,
+                    rateLimit: 1000 // مللي ثانية بين الطلبات
+                },
+
+                GEOAPIFY: {
+                    key: '', // احصل على مفتاح مجاني من geoapify.com
+                    reverseGeocode: 'https://api.geoapify.com/v1/geocode/reverse'
+                }
+            },
+
+            // =======================================
+            // إعدادات الموقع الجغرافي
+            // =======================================
+            LOCATION: {
+                // الموقع الافتراضي (الجزائر العاصمة)
+                DEFAULT: {
+                    lat: 36.7538,
+                    lng: 3.0588,
+                    name: 'الجزائر العاصمة, الجزائر',
+                    zoom: 12
+                },
+
+                // حدود الجزائر للتحقق
+                ALGERIA_BOUNDS: {
+                    north: 37.0939,
+                    south: 18.9600,
+                    west: -8.6739,
+                    east: 11.9798
+                },
+
+                // إعدادات تحديد الموقع
+                GEOLOCATION: {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000, // استخدام موقع مخزن لأقل من دقيقة
+                    watch: false, // تتبع الموقع المستمر
+                    minimumDistance: 10, // الحد الأدنى للمسافة بالمتر للتحديث
+                    circleRadius: 50, // نصف قطر دائرة الدقة بالمتر
+                    circleOpacity: 0.2
+                }
+            },
+
+            // =======================================
+            // المدن الجزائرية الرئيسية مع إحداثياتها
+            // =======================================
+            CITIES: [
+                {
+                    name: 'الجزائر العاصمة',
+                    lat: 36.7538,
+                    lng: 3.0588,
+                    population: 3415811,
+                    wilaya: 'الجزائر'
+                },
+                {
+                    name: 'وهران',
+                    lat: 35.6971,
+                    lng: -0.6359,
+                    population: 803329,
+                    wilaya: 'وهران'
+                },
+                {
+                    name: 'قسنطينة',
+                    lat: 36.3650,
+                    lng: 6.6147,
+                    population: 448374,
+                    wilaya: 'قسنطينة'
+                },
+                {
+                    name: 'عنابة',
+                    lat: 36.9000,
+                    lng: 7.7667,
+                    population: 257359,
+                    wilaya: 'عنابة'
+                },
+                {
+                    name: 'باتنة',
+                    lat: 35.5560,
+                    lng: 6.1746,
+                    population: 290645,
+                    wilaya: 'باتنة'
+                },
+                {
+                    name: 'بليدة',
+                    lat: 36.4700,
+                    lng: 2.8300,
+                    population: 163586,
+                    wilaya: 'بليدة'
+                },
+                {
+                    name: 'سطيف',
+                    lat: 36.1914,
+                    lng: 5.4136,
+                    population: 288461,
+                    wilaya: 'سطيف'
+                },
+                {
+                    name: 'تيارت',
+                    lat: 35.3789,
+                    lng: 1.3175,
+                    population: 201263,
+                    wilaya: 'تيارت'
+                },
+                {
+                    name: 'البويرة',
+                    lat: 36.3763,
+                    lng: 3.9000,
+                    population: 68545,
+                    wilaya: 'البويرة'
+                },
+                {
+                    name: 'بجاية',
+                    lat: 36.7500,
+                    lng: 5.0667,
+                    population: 176139,
+                    wilaya: 'بجاية'
+                },
+                {
+                    name: 'سيدي بلعباس',
+                    lat: 35.2000,
+                    lng: -0.6333,
+                    population: 212935,
+                    wilaya: 'سيدي بلعباس'
+                },
+                {
+                    name: 'البيض',
+                    lat: 33.6833,
+                    lng: 1.0192,
+                    population: 134000,
+                    wilaya: 'البيض'
+                },
+                {
+                    name: 'تيزي وزو',
+                    lat: 36.7167,
+                    lng: 4.0500,
+                    population: 135088,
+                    wilaya: 'تيزي وزو'
+                },
+                {
+                    name: 'غرداية',
+                    lat: 32.4833,
+                    lng: 3.6667,
+                    population: 120000,
+                    wilaya: 'غرداية'
+                },
+                {
+                    name: 'ورقلة',
+                    lat: 31.9500,
+                    lng: 5.3167,
+                    population: 133024,
+                    wilaya: 'ورقلة'
+                },
+                {
+                    name: 'تمنراست',
+                    lat: 22.7850,
+                    lng: 5.5228,
+                    population: 92635,
+                    wilaya: 'تمنراست'
+                },
+                {
+                    name: 'أدرار',
+                    lat: 27.8744,
+                    lng: -0.2936,
+                    population: 68071,
+                    wilaya: 'أدرار'
+                },
+                {
+                    name: 'الشلف',
+                    lat: 36.1667,
+                    lng: 1.3333,
+                    population: 179768,
+                    wilaya: 'الشلف'
+                },
+                {
+                    name: 'المسيلة',
+                    lat: 35.7000,
+                    lng: 4.5417,
+                    population: 156647,
+                    wilaya: 'المسيلة'
+                }
+            ],
+
+            // =======================================
+            // إعدادات الخريطة
+            // =======================================
+            MAP: {
+                // طبقات الخريطة المتاحة
+                TILES: {
+                    OPENSTREETMAP: {
+                        url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                        maxZoom: 19,
+                        subdomains: ['a', 'b', 'c']
+                    },
+                    OPENSTREETMAP_HOT: {
+                        url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+                        attribution: '© OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team',
+                        maxZoom: 19
+                    },
+                    OSM_ARABIC: {
+                        url: 'https://tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+                        attribution: '© OpenStreetMap France',
+                        maxZoom: 20
+                    },
+                    CARTO: {
+                        url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+                        attribution: '© OpenStreetMap contributors, © CartoDB',
+                        maxZoom: 20
+                    }
+                },
+
+                // إعدادات عامة
+                SETTINGS: {
+                    defaultTileLayer: 'OPENSTREETMAP',
+                    defaultZoom: 12,
+                    maxZoom: 18,
+                    minZoom: 6,
+                    zoomControl: true,
+                    dragging: true,
+                    touchZoom: true,
+                    doubleClickZoom: true,
+                    scrollWheelZoom: true,
+                    boxZoom: true,
+                    keyboard: true,
+                    fadeAnimation: true,
+                    zoomAnimation: true
+                },
+
+                // إعدادات العلامات
+                MARKERS: {
+                    userIcon: {
+                        html: '<div class="user-location-icon"><i class="fas fa-location-arrow"></i></div>',
+                        className: 'user-location-marker',
+                        iconSize: [40, 40],
+                        iconAnchor: [20, 40]
+                    },
+                    accuracyCircle: {
+                        color: '#4285f4',
+                        fillColor: '#4285f4',
+                        fillOpacity: 0.2,
+                        weight: 2
+                    },
+                    businessIconSize: {
+                        small: [30, 30],
+                        medium: [40, 40],
+                        large: [50, 50]
+                    }
+                }
+            },
+
+            // =======================================
+            // إعدادات البحث
+            // =======================================
+            SEARCH: {
+                // نصف قطر البحث بالكيلومتر
+                RADIUS_OPTIONS: [
+                    { value: 1, label: '1 كم', icon: 'fas fa-walking' },
+                    { value: 3, label: '3 كم', icon: 'fas fa-bicycle' },
+                    { value: 5, label: '5 كم', icon: 'fas fa-car' },
+                    { value: 10, label: '10 كم', icon: 'fas fa-bus' },
+                    { value: 20, label: '20 كم', icon: 'fas fa-truck' },
+                    { value: 50, label: '50 كم', icon: 'fas fa-plane' }
+                ],
+
+                // فئات البحث
+                CATEGORIES: [
+                    { value: '', label: 'جميع الفئات', icon: 'fas fa-list' },
+                    { value: 'hospital', label: 'مستشفى', icon: 'fas fa-hospital' },
+                    { value: 'clinic', label: 'عيادة', icon: 'fas fa-clinic-medical' },
+                    { value: 'pharmacy', label: 'صيدلية', icon: 'fas fa-prescription-bottle-alt' },
+                    { value: 'doctor', label: 'طبيب', icon: 'fas fa-user-md' },
+                    { value: 'association', label: 'جمعية', icon: 'fas fa-hands-helping' },
+                    { value: 'company', label: 'شركة', icon: 'fas fa-building' },
+                    { value: 'pharmacist', label: 'صيدلي', icon: 'fas fa-mortar-pestle' }
+                ],
+
+                // خيارات الترتيب
+                SORT_OPTIONS: [
+                    { value: 'distance', label: 'الأقرب أولاً', icon: 'fas fa-map-marker-alt' },
+                    { value: 'rating', label: 'الأعلى تقييماً', icon: 'fas fa-star' },
+                    { value: 'name', label: 'الاسم (أ-ي)', icon: 'fas fa-sort-alpha-down' },
+                    { value: 'reviewCount', label: 'الأكثر تقييماً', icon: 'fas fa-comments' }
+                ],
+
+                // إعدادات البحث
+                SETTINGS: {
+                    debounceDelay: 500, // تأخير البحث التلقائي بالمللي ثانية
+                    minQueryLength: 2, // الحد الأدنى لطول استعلام البحث
+                    maxResults: 50, // الحد الأقصى للنتائج
+                    enableAutocomplete: true,
+                    enableRecentSearches: true,
+                    maxRecentSearches: 10,
+                    searchHistoryDuration: 7 // أيام
+                }
+            },
+
+            // =======================================
+            // إعدادات التخزين
+            // =======================================
+            STORAGE: {
+                KEYS: {
+                    USER_LOCATION: 'user_location',
+                    RECENT_SEARCHES: 'recent_searches',
+                    FAVORITES: 'favorite_businesses',
+                    SETTINGS: 'app_settings',
+                    SEARCH_HISTORY: 'search_history'
+                },
+
+                SETTINGS: {
+                    expiration: {
+                        userLocation: 3600000, // ساعة واحدة بالمللي ثانية
+                        recentSearches: 604800000 // أسبوع واحد
+                    },
+                    encryption: false
+                }
+            },
+
+            // =======================================
+            // إعدادات واجهة المستخدم
+            // =======================================
+            UI: {
+                // الإطارات الزمنية للرسائل
+                MESSAGE_TIMEOUTS: {
+                    success: 3000,
+                    error: 5000,
+                    warning: 4000,
+                    info: 3000
+                },
+
+                // الرسائل الافتراضية
+                MESSAGES: {
+                    LOCATION_SUCCESS: 'تم تحديد موقعك بنجاح!',
+                    LOCATION_ERROR: 'تعذر تحديد موقعك. يرجى التأكد من تفعيل خدمة الموقع.',
+                    LOCATION_TIMEOUT: 'انتهت المهلة في انتظار الموقع. يرجى المحاولة مرة أخرى.',
+                    LOCATION_PERMISSION_DENIED: 'تم رفض الإذن بالوصول إلى الموقع. يرجى السماح بالوصول إلى الموقع في إعدادات المتصفح.',
+                    SEARCH_NO_RESULTS: 'لا توجد نتائج للبحث. حاول بكلمات أخرى أو وسع نطاق البحث.',
+                    NETWORK_ERROR: 'تعذر الاتصال بالخادم. يرجى التحقق من اتصال الإنترنت.'
+                },
+
+                // الألوان
+                COLORS: {
+                    primary: '#4285f4',
+                    secondary: '#34a853',
+                    danger: '#ea4335',
+                    warning: '#fbbc05',
+                    info: '#17a2b8',
+                    light: '#f8f9fa',
+                    dark: '#343a40',
+                    success: '#28a745'
+                },
+
+                // أحجام الشاشات
+                BREAKPOINTS: {
+                    xs: 0,
+                    sm: 576,
+                    md: 768,
+                    lg: 992,
+                    xl: 1200,
+                    xxl: 1400
+                }
+            },
+
+            // =======================================
+            // إعدادات التطوير
+            // =======================================
+            DEVELOPMENT: {
+                logLevel: 'warn', // debug | info | warn | error
+                enableMockData: true,
+                mockDelay: 300, // تأخير محاكاة الشبكة بالمللي ثانية
+                apiCaching: true,
+                cacheDuration: 300000 // 5 دقائق بالمللي ثانية
+            }
+        };
+
+        // ===========================================
+        // دوال المساعدة
+        // ===========================================
+        CONFIG.helpers = {
+            // التحقق من صحة المفتاح
+            validateApiKey: function (key) {
+                return key && key.length > 20 && key !== 'YOUR_GOOGLE_API_KEY';
+            },
+
+            // الحصول على إحداثيات المدينة
+            getCityCoordinates: function (cityName) {
+                const city = CONFIG.CITIES.find(c => c.name === cityName);
+                if (city) {
+                    return {
+                        lat: city.lat,
+                        lng: city.lng,
+                        name: city.name,
+                        wilaya: city.wilaya
+                    };
+                }
+                return CONFIG.LOCATION.DEFAULT;
+            },
+
+            // البحث عن مدينة بواسطة جزء من الاسم
+            searchCities: function (query) {
+                if (!query || query.length < 2) return [];
+                const searchTerm = query.toLowerCase();
+                return CONFIG.CITIES
+                    .filter(city =>
+                        city.name.toLowerCase().includes(searchTerm) ||
+                        city.wilaya.toLowerCase().includes(searchTerm)
+                    )
+                    .slice(0, 10); // الحد الأقصى 10 نتائج
+            },
+
+            // التحقق من أن الإحداثيات داخل حدود الجزائر
+            isInAlgeriaBounds: function (lat, lng) {
+                const bounds = CONFIG.LOCATION.ALGERIA_BOUNDS;
+                return (
+                    lat >= bounds.south &&
+                    lat <= bounds.north &&
+                    lng >= bounds.west &&
+                    lng <= bounds.east
+                );
+            },
+
+            // الحصول على المسافة بين موقعين
+            calculateDistance: function (lat1, lng1, lat2, lng2) {
+                const R = 6371; // نصف قطر الأرض بالكيلومتر
+                const dLat = this.toRad(lat2 - lat1);
+                const dLng = this.toRad(lng2 - lng1);
+                const a =
+                    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(this.toRad(lat1)) * Math.cos(this.toRad(lat2)) *
+                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            },
+
+            // تحويل الدرجات إلى راديان
+            toRad: function (degrees) {
+                return degrees * Math.PI / 180;
+            },
+
+            // تنسيق المسافة
+            formatDistance: function (distanceKm) {
+                if (distanceKm < 1) {
+                    return Math.round(distanceKm * 1000) + ' متر';
+                } else if (distanceKm < 10) {
+                    return distanceKm.toFixed(1) + ' كم';
+                } else {
+                    return Math.round(distanceKm) + ' كم';
+                }
+            },
+
+            // الحصول على اسم الفئة
+            getCategoryLabel: function (categoryValue) {
+                const category = CONFIG.SEARCH.CATEGORIES.find(c => c.value === categoryValue);
+                return category ? category.label : 'غير معروف';
+            },
+
+            // الحصول على أيقونة الفئة
+            getCategoryIcon: function (categoryValue) {
+                const category = CONFIG.SEARCH.CATEGORIES.find(c => c.value === categoryValue);
+                return category ? category.icon : 'fas fa-map-marker-alt';
+            },
+
+            // الحصول على خيارات نصف القرض بناءً على النوع
+            getRadiusOptionsForType: function (type = 'mobile') {
+                if (type === 'mobile') {
+                    return CONFIG.SEARCH.RADIUS_OPTIONS.slice(0, 4); // أول 4 خيارات للجوال
+                }
+                return CONFIG.SEARCH.RADIUS_OPTIONS;
+            }
+        };
+
+        // ===========================================
+        // إضافة وظائف للموقع الجغرافي
+        // ===========================================
+        CONFIG.location = {
+            // الحصول على الموقع الحالي للمستخدم
+            getCurrentLocation: function (options = {}) {
+                return new Promise((resolve, reject) => {
+                    if (!navigator.geolocation) {
+                        reject(new Error('المتصفح لا يدعم خدمة تحديد الموقع.'));
+                        return;
+                    }
+
+                    const geolocationOptions = {
+                        ...CONFIG.LOCATION.GEOLOCATION,
+                        ...options
+                    };
+
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            const location = {
+                                lat: position.coords.latitude,
+                                lng: position.coords.longitude,
+                                accuracy: position.coords.accuracy || 50,
+                                altitude: position.coords.altitude,
+                                altitudeAccuracy: position.coords.altitudeAccuracy,
+                                heading: position.coords.heading,
+                                speed: position.coords.speed,
+                                timestamp: position.timestamp
+                            };
+
+                            // التحقق من أن الموقع داخل الجزائر
+                            if (!CONFIG.helpers.isInAlgeriaBounds(location.lat, location.lng)) {
+                                reject(new Error('يبدو أنك خارج الجزائر. تم استخدام الموقع الافتراضي.'));
+                                resolve(CONFIG.LOCATION.DEFAULT);
+                                return;
+                            }
+
+                            // حفظ الموقع في التخزين المحلي
+                            this.saveLocationToStorage(location);
+                            resolve(location);
+                        },
+                        (error) => {
+                            const errorMessage = this.getGeolocationError(error);
+                            reject(new Error(errorMessage));
+                        },
+                        geolocationOptions
+                    );
+                });
+            },
+
+            // الحصول على رسالة الخطأ المناسبة
+            getGeolocationError: function (error) {
+                switch (error.code) {
+                    case error.PERMISSION_DENIED:
+                        return CONFIG.UI.MESSAGES.LOCATION_PERMISSION_DENIED;
+                    case error.POSITION_UNAVAILABLE:
+                        return CONFIG.UI.MESSAGES.LOCATION_ERROR;
+                    case error.TIMEOUT:
+                        return CONFIG.UI.MESSAGES.LOCATION_TIMEOUT;
+                    default:
+                        return CONFIG.UI.MESSAGES.LOCATION_ERROR;
+                }
+            },
+
+            // حفظ الموقع في التخزين المحلي
+            saveLocationToStorage: function (location) {
+                try {
+                    const locationData = {
+                        ...location,
+                        savedAt: Date.now(),
+                        expiresAt: Date.now() + CONFIG.STORAGE.SETTINGS.expiration.userLocation
+                    };
+
+                    localStorage.setItem(
+                        CONFIG.STORAGE.KEYS.USER_LOCATION,
+                        JSON.stringify(locationData)
+                    );
+                } catch (error) {
+                    console.warn('فشل حفظ الموقع:', error);
+                }
+            },
+
+            // استرجاع الموقع من التخزين المحلي
+            getLocationFromStorage: function () {
+                try {
+                    const stored = localStorage.getItem(CONFIG.STORAGE.KEYS.USER_LOCATION);
+                    if (!stored) return null;
+
+                    const location = JSON.parse(stored);
+
+                    // التحقق من صلاحية البيانات
+                    if (location.expiresAt && location.expiresAt > Date.now()) {
+                        return location;
+                    }
+
+                    // البيانات منتهية الصلاحية
+                    localStorage.removeItem(CONFIG.STORAGE.KEYS.USER_LOCATION);
+                    return null;
+                } catch (error) {
+                    console.warn('فشل استرجاع الموقع:', error);
+                    return null;
+                }
+            },
+
+            // الحصول على أقرب مدينة للموقع
+            getNearestCity: function (lat, lng) {
+                let nearestCity = null;
+                let minDistance = Infinity;
+
+                for (const city of CONFIG.CITIES) {
+                    const distance = CONFIG.helpers.calculateDistance(lat, lng, city.lat, city.lng);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestCity = city;
+                    }
+                }
+
+                return nearestCity ? {
+                    ...nearestCity,
+                    distance: minDistance
+                } : null;
+            },
+
+            // الحصول على العنوان من الإحداثيات (Geocoding)
+            getAddressFromCoords: async function (lat, lng) {
+                try {
+                    // محاولة استخدام Google Geocoding أولاً
+                    if (CONFIG.helpers.validateApiKey(CONFIG.APIS.GOOGLE.key)) {
+                        const url = `${CONFIG.APIS.GOOGLE.geocode}/json?latlng=${lat},${lng}&key=${CONFIG.APIS.GOOGLE.key}&language=ar`;
+
+                        const response = await fetch(url);
+                        const data = await response.json();
+
+                        if (data.status === 'OK' && data.results.length > 0) {
+                            return {
+                                address: data.results[0].formatted_address,
+                                provider: 'google'
+                            };
+                        }
+                    }
+
+                    // استخدام Nominatim كبديل
+                    const nominatimUrl = `${CONFIG.APIS.OPENSTREETMAP.nominatim}/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=ar`;
+                    const response = await fetch(nominatimUrl);
+                    const data = await response.json();
+
+                    if (data.display_name) {
+                        return {
+                            address: data.display_name,
+                            provider: 'nominatim'
+                        };
+                    }
+
+                    return null;
+                } catch (error) {
+                    console.error('خطأ في الحصول على العنوان:', error);
+                    return null;
+                }
+            }
+        };
+
+        // ===========================================
+        // إضافة وظائف للخريطة
+        // ===========================================
+        CONFIG.map = {
+            // إنشاء خريطة Leaflet
+            createMap: function (containerId, options = {}) {
+                const defaultOptions = {
+                    center: CONFIG.LOCATION.DEFAULT,
+                    zoom: CONFIG.MAP.SETTINGS.defaultZoom,
+                    layers: [this.getTileLayer()],
+                    ...CONFIG.MAP.SETTINGS,
+                    ...options
+                };
+
+                return L.map(containerId, defaultOptions);
+            },
+
+            // الحصول على طبقة الخريطة
+            getTileLayer: function (layerName = CONFIG.MAP.SETTINGS.defaultTileLayer) {
+                const tileConfig = CONFIG.MAP.TILES[layerName] || CONFIG.MAP.TILES.OPENSTREETMAP;
+                return L.tileLayer(tileConfig.url, {
+                    attribution: tileConfig.attribution,
+                    maxZoom: tileConfig.maxZoom,
+                    subdomains: tileConfig.subdomains || ['a', 'b', 'c']
+                });
+            },
+
+            // إنشاء علامة موقع المستخدم
+            createUserMarker: function (location, options = {}) {
+                const iconOptions = {
+                    ...CONFIG.MAP.MARKERS.userIcon,
+                    ...options.icon
+                };
+
+                const icon = L.divIcon(iconOptions);
+
+                const marker = L.marker([location.lat, location.lng], {
+                    icon: icon,
+                    zIndexOffset: 1000,
+                    title: 'موقعك الحالي',
+                    draggable: false
+                });
+
+                // إضافة دائرة الدقة إذا كانت متوفرة
+                if (location.accuracy) {
+                    const circleOptions = {
+                        ...CONFIG.MAP.MARKERS.accuracyCircle,
+                        radius: location.accuracy
+                    };
+
+                    const accuracyCircle = L.circle([location.lat, location.lng], circleOptions);
+                    marker.accuracyCircle = accuracyCircle;
+                }
+
+                return marker;
+            },
+
+            // إنشاء علامة المؤسسة
+            createBusinessMarker: function (business, options = {}) {
+                const iconSize = options.size || 'medium';
+                const icon = L.divIcon({
+                    html: `<div class="business-marker ${business.category}" title="${business.name}">
+                      <i class="${CONFIG.helpers.getCategoryIcon(business.category)}"></i>
+                   </div>`,
+                    className: 'business-marker-icon',
+                    iconSize: CONFIG.MAP.MARKERS.businessIconSize[iconSize],
+                    iconAnchor: [CONFIG.MAP.MARKERS.businessIconSize[iconSize][0] / 2, CONFIG.MAP.MARKERS.businessIconSize[iconSize][1]]
+                });
+
+                return L.marker([business.lat, business.lng], {
+                    icon: icon,
+                    title: business.name
+                });
+            }
+        };
+
+        // ===========================================
+        // التصدير والتهيئة
+        // ===========================================
+        // تسجيل الإصدار
+        console.log(`${CONFIG.APP.name} - الإصدار ${CONFIG.APP.version}`);
+
+        // تصدير الإعدادات للاستخدام العالمي
+        window.CONFIG = CONFIG;
+
+        // التصدير للاستخدام في الوحدات
+        if (typeof module !== 'undefined' && module.exports) {
+            module.exports = CONFIG;
+        }
+
+        // التحقق من مفاتيح API
+        if (CONFIG.DEVELOPMENT.logLevel === 'debug') {
+            console.debug('مفتاح Google API:', CONFIG.helpers.validateApiKey(CONFIG.APIS.GOOGLE.key) ? 'صالحة' : 'غير صالحة أو غير موجود');
+        }
+
+        // إضافة listener لتفعيل وضع الظلام تلقائياً
+        if (CONFIG.UI.theme === 'auto') {
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            document.documentElement.setAttribute('data-theme', prefersDark ? 'dark' : 'light');
+        }
+    </script>
+
+
+
+    <script>
+        class LocalStorageManager {
+            static saveBusiness(business) {
+                const businesses = this.getBusinesses();
+                businesses.push({
+                    ...business,
+                    id: `local-${Date.now()}`,
+                    source: 'user',
+                    verified: false,
+                    createdAt: new Date().toISOString()
+                });
+                localStorage.setItem('user_submitted_businesses', JSON.stringify(businesses));
+            }
+
+            static getBusinesses() {
+                return JSON.parse(localStorage.getItem('user_submitted_businesses') || '[]');
+            }
+        }
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('جاري تحميل الخريطة...');
+
+            // تحقق من وجود عنصر الخريطة
+            const mapElement = document.getElementById('map');
+            if (!mapElement) {
+                console.error('❌ عنصر الخريطة غير موجود في الصفحة');
+                return;
+            }
+
+            // تحقق من تحميل Leaflet
+            if (typeof L === 'undefined') {
+                console.error('❌ مكتبة Leaflet لم تحمل');
+                mapElement.innerHTML = '<div class="map-error">تعذر تحميل الخريطة. يرجى تحديث الصفحة.</div>';
+                return;
+            }
+
+            // إحداثيات افتراضية للجزائر
+            const algeriaCenter = [36.7538, 3.0588];
+
+            try {
+                // إنشاء الخريطة
+                window.map = L.map('map').setView(algeriaCenter, 12);
+
+                // إضافة طبقة الخريطة
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: 19
+                }).addTo(window.map);
+
+                // إضافة علامة تجريبية
+                L.marker(algeriaCenter)
+                    .addTo(window.map)
+                    .bindPopup('الجزائر العاصمة<br>موقع تجريبي')
+                    .openPopup();
+
+                console.log('✅ تم تحميل الخريطة بنجاح');
+
+                // إضافة تحكمات بسيطة
+                setupMapControls();
+
+            } catch (error) {
+                console.error('❌ خطأ في إنشاء الخريطة:', error);
+                mapElement.innerHTML = `
+            <div class="map-error">
+                <h3>تعذر تحميل الخريطة</h3>
+                <p>${error.message}</p>
+                <button onclick="location.reload()" class="btn btn-primary">
+                    إعادة تحميل الصفحة
+                </button>
+            </div>
+        `;
+            }
+        });
+
+        function setupMapControls() {
+            // تكبير
+            document.getElementById('zoom-in')?.addEventListener('click', () => {
+                window.map?.zoomIn();
+            });
+
+            // تصغير
+            document.getElementById('zoom-out')?.addEventListener('click', () => {
+                window.map?.zoomOut();
+            });
+
+            // تحديد الموقع
+            document.getElementById('locate-me')?.addEventListener('click', locateUser);
+
+            // ملء الشاشة
+            document.getElementById('fullscreen-map')?.addEventListener('click', toggleFullscreen);
+        }
+
+        function locateUser() {
+            if (!navigator.geolocation) {
+                alert('المتصفح لا يدعم خدمة تحديد الموقع');
+                return;
+            }
+
+            const locateBtn = document.getElementById('locate-me');
+            if (locateBtn) {
+                locateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحديد...';
+                locateBtn.disabled = true;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    const userLatLng = [position.coords.latitude, position.coords.longitude];
+
+                    // إزالة العلامة القديمة
+                    if (window.userMarker) {
+                        window.map.removeLayer(window.userMarker);
+                    }
+
+                    // إضافة علامة جديدة
+                    window.userMarker = L.marker(userLatLng, {
+                        icon: L.divIcon({
+                            html: '<div class="user-location-marker"><i class="fas fa-location-arrow"></i></div>',
+                            className: 'user-location-icon'
+                        })
+                    }).addTo(window.map);
+
+                    // التمركز على الموقع
+                    window.map.setView(userLatLng, 15);
+
+                    // إعادة ضبط الزر
+                    if (locateBtn) {
+                        locateBtn.innerHTML = '<i class="fas fa-location-arrow"></i> موقعي';
+                        locateBtn.disabled = false;
+                    }
+
+                    alert('تم تحديد موقعك بنجاح!');
+                },
+                function (error) {
+                    alert('تعذر تحديد موقعك. تأكد من تفعيل خدمة الموقع.');
+
+                    if (locateBtn) {
+                        locateBtn.innerHTML = '<i class="fas fa-location-arrow"></i> موقعي';
+                        locateBtn.disabled = false;
+                    }
+                }
+            );
+        }
+
+        function toggleFullscreen() {
+            const mapElement = document.getElementById('map');
+            const fullscreenBtn = document.getElementById('fullscreen-map');
+
+            if (!document.fullscreenElement) {
+                if (mapElement.requestFullscreen) {
+                    mapElement.requestFullscreen();
+                }
+                if (fullscreenBtn) {
+                    fullscreenBtn.innerHTML = '<i class="fas fa-compress"></i>';
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+                if (fullscreenBtn) {
+                    fullscreenBtn.innerHTML = '<i class="fas fa-expand"></i>';
+                }
+            }
+        }
+    </script>
+
+    <script>
+        // أضف هذا الكود للتحقق من المشاكل
+        document.addEventListener('DOMContentLoaded', function () {
+            console.log('=== فحص الخريطة ===');
+
+            // 1. تحقق من وجود عنصر الخريطة
+            const mapDiv = document.getElementById('map');
+            console.log('عنصر الخريطة موجود؟', !!mapDiv);
+
+            // 2. تحقق من أبعاد العنصر
+            if (mapDiv) {
+                const rect = mapDiv.getBoundingClientRect();
+                console.log('أبعاد الخريطة:', rect.width, 'x', rect.height);
+            }
+
+            // 3. تحقق من مكتبة Leaflet
+            console.log('مكتبة Leaflet محملة؟', typeof L !== 'undefined');
+
+            // 4. تحقق من اتصال الإنترنت
+            console.log('اتصال الإنترنت؟', navigator.onLine);
+        });
+    </script>
+
+
+    <script>
+        // استخدام محرك البحث
+        document.addEventListener('DOMContentLoaded', function () {
+            // مثال: البحث عند الضغط على زر البحث
+            const searchForm = document.getElementById('search-form');
+            if (searchForm) {
+                searchForm.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+
+                    const query = document.getElementById('main-search').value;
+                    const city = document.getElementById('location-search').value;
+                    const category = document.getElementById('category-select').value;
+                    const radius = document.getElementById('radius-select').value;
+
+                    // الحصول على موقع المستخدم إذا كان متاحاً
+                    let userLocation = null;
+                    if (navigator.geolocation) {
+                        userLocation = await new Promise(resolve => {
+                            navigator.geolocation.getCurrentPosition(
+                                position => resolve({
+                                    lat: position.coords.latitude,
+                                    lng: position.coords.longitude
+                                }),
+                                () => resolve(null)
+                            );
+                        });
+                    }
+
+                    // تنفيذ البحث
+                    const results = await window.searchEngine.unifiedSearch(query, {
+                        city: city,
+                        category: category,
+                        radius: parseInt(radius),
+                        userLocation: userLocation
+                    });
+
+                    // عرض النتائج
+                    displayResults(results);
+                });
+            }
+
+            // الاستماع لنتائج البحث
+            document.addEventListener('searchResults', function (event) {
+                const { results, query, filters } = event.detail;
+                console.log(`تم العثور على ${results.length} نتيجة للبحث: "${query}"`);
+            });
+        });
     </script>
 
 </body>
