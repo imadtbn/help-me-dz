@@ -1029,3 +1029,510 @@ body {
     margin-bottom: 8px;
     color: #555;
 }
+
+
+
+/* رسائل الخطأ */
+.global-error {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: #ef4444;
+    color: white;
+    padding: 1rem;
+    z-index: 9999;
+    text-align: center;
+}
+
+.error-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.btn-retry {
+    background: white;
+    color: #ef4444;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: bold;
+}
+
+/* بطاقات المؤسسات */
+.business-card {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+.business-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+
+.business-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.business-category {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #4361ee;
+    font-weight: 600;
+}
+
+.featured-badge {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.business-name {
+    font-size: 1.25rem;
+    color: #1f2937;
+    margin-bottom: 0.75rem;
+}
+
+.business-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.business-address,
+.business-phone {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #6b7280;
+}
+
+.business-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.stars {
+    color: #fbbf24;
+}
+
+.rating-value {
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.business-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.btn-action {
+    flex: 1;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-call {
+    background: #10b981;
+    color: white;
+}
+
+.btn-directions {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-details {
+    background: #8b5cf6;
+    color: white;
+}
+
+.btn-action:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* المؤسسات المميزة */
+.featured-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.featured-card:hover {
+    border-color: #4361ee;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(67, 97, 238, 0.15);
+}
+
+.featured-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.featured-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #4361ee, #3a0ca3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+}
+
+.featured-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #fbbf24;
+}
+
+.featured-address {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+}
+
+.featured-card-footer {
+    margin-top: 1rem;
+}
+
+.btn-view-details {
+    width: 100%;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, #4361ee, #3a0ca3);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-view-details:hover {
+    background: linear-gradient(135deg, #3a0ca3, #4361ee);
+    transform: translateY(-1px);
+}
+
+/* الخريطة */
+.interactive-map {
+    width: 100%;
+    height: 500px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+}
+
+.map-controls {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 1000;
+}
+
+.map-control-btn {
+    width: 40px;
+    height: 40px;
+    background: white;
+    border: none;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1f2937;
+    transition: all 0.2s ease;
+}
+
+.map-control-btn:hover {
+    background: #f3f4f6;
+    transform: scale(1.05);
+}
+
+/* الإحصائيات */
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #4361ee, #3a0ca3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    margin: 0 auto 1rem;
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+}
+
+.stat-label {
+    color: #6b7280;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* النافذة المنبثقة */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 12px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: #1f2937;
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: #6b7280;
+    transition: color 0.2s ease;
+}
+
+.close-modal:hover {
+    color: #ef4444;
+}
+
+.modal-body {
+    padding: 1.5rem;
+}
+
+/* تفاصيل المؤسسة */
+.business-detail .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.detail-category {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #4361ee;
+    font-weight: 600;
+    font-size: 1.125rem;
+}
+
+.detail-rating {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #fbbf24;
+    font-size: 1.125rem;
+}
+
+.detail-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    color: #4b5563;
+}
+
+.info-item i {
+    color: #4361ee;
+    margin-top: 0.25rem;
+}
+
+.phone-numbers {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.phone-number {
+    padding: 0.25rem 0.5rem;
+    background: #f3f4f6;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.detail-description {
+    background: #f9fafb;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.detail-description h4 {
+    color: #1f2937;
+    margin-bottom: 0.5rem;
+}
+
+.detail-description p {
+    color: #4b5563;
+    line-height: 1.6;
+}
+
+.detail-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.btn-primary {
+    flex: 1;
+    padding: 0.75rem 1.5rem;
+    background: linear-gradient(135deg, #4361ee, #3a0ca3);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-secondary {
+    flex: 1;
+    padding: 0.75rem 1.5rem;
+    background: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover,
+.btn-secondary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+/* التجاوب */
+@media (max-width: 768px) {
+    .business-card-actions {
+        flex-direction: column;
+    }
+    
+    .btn-action {
+        width: 100%;
+    }
+    
+    .detail-actions {
+        flex-direction: column;
+    }
+    
+    .btn-primary,
+    .btn-secondary {
+        width: 100%;
+    }
+    
+    .interactive-map {
+        height: 400px;
+    }
+}
